@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opml version="1.0">
+  <head>
+    <dateCreated>Sat, 09 May 2026 16:00:22 +0000</dateCreated>
+    <title>Tiny Tiny RSS Feed Export</title>
+  </head>
+  <body>
+    <outline text="AI资讯" ttrssSortOrder="0">
+      <outline type="rss" text="AI新闻资讯" xmlUrl="https://rss.brucehan.club/aibase/news" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="0" htmlUrl="https://www.aibase.com/zh/news"/>
+      <outline type="rss" text="掘金 人工智能" xmlUrl="https://rss.brucehan.club/juejin/category/ai" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://juejin.cn/ai"/>
+      <outline type="rss" text="量子位" xmlUrl="https://www.qbitai.com/feed" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://www.qbitai.com"/>
+    </outline>
+    <outline text="Blog" ttrssSortOrder="0">
+      <outline type="rss" text="阮一峰的网络日志" xmlUrl="http://feeds.feedburner.com/ruanyifeng" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="720" htmlUrl="http://www.ruanyifeng.com/blog/"/>
+    </outline>
+    <outline text="日报" ttrssSortOrder="0">
+      <outline type="rss" text="AI日报" xmlUrl="https://rss.brucehan.club/aibase/daily" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="720" htmlUrl="https://www.aibase.com/zh/daily"/>
+      <outline type="rss" text="Readhub - 每日早报" xmlUrl="https://rss.brucehan.club/readhub/daily" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="720" htmlUrl="https://api.readhub.cn/daily"/>
+      <outline type="rss" text="晚点 - 最新报道" xmlUrl="https://rss.brucehan.club/latepost" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://www.latepost.com/"/>
+    </outline>
+    <outline text="热榜" ttrssSortOrder="0">
+      <outline type="rss" text="掘金AI本周最热" xmlUrl="https://rss.brucehan.club/juejin/trending/ai/weekly" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="0" htmlUrl="https://juejin.im/android?sort=weekly_hottest"/>
+    </outline>
+    <outline text="英语" ttrssSortOrder="0">
+      <outline type="rss" text="Learningenglish-authentic-real-english-BBC" xmlUrl="https://rss.brucehan.club/bbc/learningenglish/authentic-real-english" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://www.bbc.co.uk/learningenglish/chinese/features/authentic-real-english"/>
+      <outline type="rss" text="Learningenglish-take-away-english-BBC" xmlUrl="https://rss.brucehan.club/bbc/learningenglish/take-away-english" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://www.bbc.co.uk/learningenglish/chinese/features/take-away-english"/>
+      <outline type="rss" text="纽约时报中文网 - 中英对照版" xmlUrl="https://rss.brucehan.club/nytimes/dual" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://cn.nytimes.com"/>
+    </outline>
+    <outline text="资讯" ttrssSortOrder="0">
+      <outline type="rss" text="Ars Technica" xmlUrl="https://arstechnica.com/feed/" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://arstechnica.com"/>
+      <outline type="rss" text="InfoQ - AI, ML &amp; Data Engineering" xmlUrl="https://feed.infoq.com/ai-ml-data-eng/" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://www.infoq.com"/>
+      <outline type="rss" text="InfoQ 推荐" xmlUrl="https://rss.brucehan.club/infoq/recommend" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://www.infoq.cn"/>
+      <outline type="rss" text="少数派" xmlUrl="https://rss.brucehan.club/sspai/index" ttrssSortOrder="0" ttrssPurgeInterval="0" ttrssUpdateInterval="60" htmlUrl="https://sspai.com"/>
+    </outline>
+    <outline text="tt-rss-prefs" schema-version="151">
+      <outline pref-name="BLACKLISTED_TAGS" value="blog, blogroll, general, generic, main, misc, news, uncategorized"/>
+      <outline pref-name="DEFAULT_SEARCH_LANGUAGE" value="Simple"/>
+      <outline pref-name="DEFAULT_UPDATE_INTERVAL" value="60"/>
+      <outline pref-name="ENABLE_API_ACCESS" value="1"/>
+      <outline pref-name="PURGE_OLD_DAYS" value="10"/>
+      <outline pref-name="USER_LANGUAGE" value="auto"/>
+      <outline pref-name="_ENABLED_PLUGINS" value="no_iframes,note"/>
+      <outline pref-name="_PREFS_MIGRATED" value="1"/>
+    </outline>
+    <outline text="tt-rss-labels" schema-version="151"/>
+    <outline text="tt-rss-filters" schema-version="151"/>
+  </body>
+</opml>
