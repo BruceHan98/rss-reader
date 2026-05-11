@@ -41,6 +41,7 @@ export const articles = sqliteTable('articles', {
   isReadLater: integer('is_read_later', { mode: 'boolean' }).notNull().default(false),
   aiScore: integer('ai_score'),
   aiTags: text('ai_tags'),
+  readAt: text('read_at'),
   createdAt: text('created_at').notNull(),
 });
 

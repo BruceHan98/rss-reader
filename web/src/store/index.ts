@@ -18,6 +18,7 @@ interface AppState {
   selectedArticleId: string | null;
   searchQuery: string;
   sidebarOpen: boolean;
+  immersiveMode: boolean;
 
   // Actions
   loadFeeds: () => Promise<void>;
@@ -27,6 +28,7 @@ interface AppState {
   setSelectedArticle: (id: string | null) => void;
   setSearchQuery: (q: string) => void;
   setSidebarOpen: (open: boolean) => void;
+  setImmersiveMode: (v: boolean) => void;
 
   refreshFeed: (feedId: string) => Promise<void>;
   deleteFeed: (feedId: string) => Promise<void>;
@@ -53,6 +55,7 @@ export const useStore = create<AppState>((set, get) => ({
   selectedArticleId: null,
   searchQuery: '',
   sidebarOpen: typeof window !== "undefined" && window.innerWidth >= 1024,
+  immersiveMode: false,
 
   loadFeeds: async () => {
     const feeds = await api.getFeeds();
@@ -75,6 +78,7 @@ export const useStore = create<AppState>((set, get) => ({
   setSelectedArticle: (id) => set({ selectedArticleId: id }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+  setImmersiveMode: (immersiveMode) => set({ immersiveMode }),
 
   refreshFeed: async (feedId) => {
     await api.refreshFeed(feedId);

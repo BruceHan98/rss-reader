@@ -98,8 +98,10 @@ sqlite.exec(`
 // 当 articles 表已存在时，尝试添加新列（如已存在则忽略）
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN ai_score INTEGER'); } catch {}
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN ai_tags TEXT'); } catch {}
+try { sqlite.exec('ALTER TABLE articles ADD COLUMN read_at TEXT'); } catch {}
 // ai_score 索引需在列存在后创建
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_score ON articles(ai_score)'); } catch {}
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_read_at ON articles(read_at)'); } catch {}
 
 // 默认设置，首次启动写入，后续补充可能缺失的 key
 const DEFAULT_SETTINGS: Record<string, string> = {

@@ -382,7 +382,7 @@ export default function ArticleList() {
       </div>
 
       {/* List */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[3.5rem] lg:pb-0">
         {articles.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-[#78786C]">
             <div className="w-16 h-16 rounded-full bg-[#E6DCCD]/60 flex items-center justify-center">

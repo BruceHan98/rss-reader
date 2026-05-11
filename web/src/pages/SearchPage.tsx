@@ -85,7 +85,7 @@ export default function SearchPage() {
       </div>
 
       {/* Results */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-[3.5rem] lg:pb-0">
         {loading && (
           <div className="flex justify-center py-16">
             <div className="w-12 h-12 rounded-full bg-[#E6DCCD]/60 flex items-center justify-center">

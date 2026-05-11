@@ -122,7 +122,8 @@ export async function articleRoutes(app: FastifyInstance) {
     '/api/articles/:id/read',
     async (req) => {
       const isRead = req.body?.isRead !== false;
-      await db.update(articles).set({ isRead }).where(eq(articles.id, req.params.id));
+      const readAt = isRead ? new Date().toISOString() : null;
+      await db.update(articles).set({ isRead, readAt }).where(eq(articles.id, req.params.id));
       return { success: true };
     }
   );
@@ -145,10 +146,27 @@ export async function articleRoutes(app: FastifyInstance) {
     return { isReadLater: newVal };
   });
 
+  // GET /api/stats/reading - 按天统计实际阅读文章数（近 6 个月）
+  app.get('/api/stats/reading', async () => {
+    const rows = sqlite
+      .prepare(
+        `SELECT date(read_at) as day, COUNT(*) as count
+         FROM articles
+         WHERE is_read = 1
+           AND read_at IS NOT NULL
+           AND read_at >= date('now', '-6 months')
+         GROUP BY day
+         ORDER BY day ASC`
+      )
+      .all() as Array<{ day: string; count: number }>;
+    return { stats: rows };
+  });
+
   // POST /api/articles/mark-all-read
   app.post<{ Body: { feedId?: string; groupId?: string } }>('/api/articles/mark-all-read', async (req) => {
+    const now = new Date().toISOString();
     if (req.body?.feedId) {
-      sqlite.prepare('UPDATE articles SET is_read = 1 WHERE feed_id = ?').run(req.body.feedId);
+      sqlite.prepare('UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?) WHERE feed_id = ? AND is_read = 0').run(now, req.body.feedId);
     } else if (req.body?.groupId) {
       const feedIds = sqlite
         .prepare('SELECT id FROM feeds WHERE group_id = ?')
@@ -156,11 +174,11 @@ export async function articleRoutes(app: FastifyInstance) {
         .map((r: any) => r.id);
       if (feedIds.length) {
         sqlite
-          .prepare(`UPDATE articles SET is_read = 1 WHERE feed_id IN (${feedIds.map(() => '?').join(',')})`)
-          .run(...feedIds);
+          .prepare(`UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?) WHERE feed_id IN (${feedIds.map(() => '?').join(',')}) AND is_read = 0`)
+          .run(now, ...feedIds);
       }
     } else {
-      sqlite.prepare('UPDATE articles SET is_read = 1').run();
+      sqlite.prepare('UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?) WHERE is_read = 0').run(now);
     }
     return { success: true };
   });

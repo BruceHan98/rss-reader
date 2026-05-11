@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Inbox, BookOpen, Search, Settings2, Rss } fr
 import { cn } from '../lib/utils';
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { sidebarOpen, setSidebarOpen, feeds, filter, setFilter } = useStore();
+  const { sidebarOpen, setSidebarOpen, feeds, filter, setFilter, immersiveMode } = useStore();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -74,7 +74,10 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {/* Mobile bottom Tab navigation */}
         <nav
-          className="lg:hidden flex-shrink-0 border-t border-[#DED8CF]/50 bg-[#FEFEFA]/95 backdrop-blur-md z-40"
+          className={cn(
+            "lg:hidden fixed bottom-0 left-0 right-0 border-t border-[#DED8CF]/50 bg-[#FEFEFA]/95 backdrop-blur-md z-40 transition-[transform,opacity] duration-300 ease-in-out",
+            immersiveMode ? "translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
+          )}
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         >
           <div className="flex items-stretch h-14">

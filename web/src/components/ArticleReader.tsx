@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import { api, type Article } from '../lib/api';
@@ -147,7 +147,10 @@ interface Props {
 }
 
 export default function ArticleReader({ articleId, onBack }: Props) {
-  const { loadFeeds } = useStore();
+  const { loadFeeds, setImmersiveMode, immersiveMode } = useStore();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollY = useRef(0);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [widthKey, setWidthKey] = useState<WidthKey>(() => loadPref('reader-width', 'md'));
@@ -252,10 +255,15 @@ export default function ArticleReader({ articleId, onBack }: Props) {
   return (
     <div
       className="flex flex-col h-full bg-[#FDFCF8] overflow-hidden"
-      onClick={() => { setShowWidthPicker(false); setShowFontPicker(false); }}
+      onClick={(e) => { const t=e.target as HTMLElement; if (t.closest("button,a")) return; setShowWidthPicker(false); setShowFontPicker(false); if (window.innerWidth < 768) setImmersiveMode(false); }}
     >
-      {/* Toolbar */}
-      <div className="border-b border-[#DED8CF]/50 bg-[#FDFCF8]/90 dark:bg-[#1C1C18]/95 backdrop-blur-sm flex-shrink-0">
+      {/* Toolbar: fixed on mobile, static on desktop */}
+      <div className={cn(
+        "border-b border-[#DED8CF]/50 bg-[#FDFCF8]/90 dark:bg-[#1C1C18]/95 backdrop-blur-sm z-30",
+        "fixed top-0 left-0 right-0 transition-[transform,opacity] duration-300 ease-in-out",
+        "md:static md:flex-shrink-0 md:translate-y-0 md:opacity-100",
+        immersiveMode ? "-translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
+      )}>
         <div className={cn('mx-auto px-4 md:px-6 py-3.5 flex items-center gap-2', widthPreset.maxW)}>
           {/* Mobile back button */}
           {onBack && (
@@ -270,27 +278,27 @@ export default function ArticleReader({ articleId, onBack }: Props) {
           <button
             onClick={handleStar}
             className={cn(
-              'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
+              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
               article.isStarred
                 ? 'bg-[#C18C5D]/15 text-[#C18C5D]'
                 : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#C18C5D]/15 hover:text-[#C18C5D]'
             )}
           >
-            <Star size={12} fill={article.isStarred ? 'currentColor' : 'none'} />
-            {article.isStarred ? '已收藏' : '收藏'}
+            <Star size={14} fill={article.isStarred ? 'currentColor' : 'none'} />
+            <span className="hidden sm:inline">{article.isStarred ? '已收藏' : '收藏'}</span>
           </button>
 
           <button
             onClick={handleReadLater}
             className={cn(
-              'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
+              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
               article.isReadLater
                 ? 'bg-[#5D7052]/15 text-[#5D7052]'
                 : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#5D7052]/15 hover:text-[#5D7052]'
             )}
           >
-            <Clock size={12} />
-            {article.isReadLater ? '稍后阅读' : '稍后'}
+            <Clock size={14} />
+            <span className="hidden sm:inline">{article.isReadLater ? '稍后阅读' : '稍后'}</span>
           </button>
 
           {article.url && (
@@ -298,10 +306,10 @@ export default function ArticleReader({ articleId, onBack }: Props) {
               href={article.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] transition-all duration-200 hover:bg-[#5D7052] hover:text-[#F3F4F1] hover:scale-105 active:scale-95"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] transition-all duration-200 hover:bg-[#5D7052] hover:text-[#F3F4F1] hover:scale-105 active:scale-95"
             >
-              <ExternalLink size={12} />
-              原文
+              <ExternalLink size={14} />
+              <span className="hidden sm:inline">原文</span>
             </a>
           )}
 
@@ -321,7 +329,7 @@ export default function ArticleReader({ articleId, onBack }: Props) {
               title="字体大小"
             >
               <ALargeSmall size={14} />
-              <span>{fontPreset.label}</span>
+              <span className="hidden sm:inline">{fontPreset.label}</span>
             </button>
             {showFontPicker && (
               <div
@@ -360,7 +368,7 @@ export default function ArticleReader({ articleId, onBack }: Props) {
               title="展示宽度"
             >
               <AlignJustify size={14} />
-              <span>{widthPreset.label}</span>
+              <span className="hidden sm:inline">{widthPreset.label}</span>
             </button>
             {showWidthPicker && (
               <div
@@ -394,7 +402,21 @@ export default function ArticleReader({ articleId, onBack }: Props) {
       </div>
 
       {/* Article */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto"
+        onScroll={(e) => {
+          if (window.innerWidth >= 768) return;
+          const el=e.currentTarget;
+          const delta=el.scrollTop-lastScrollY.current;
+          lastScrollY.current=el.scrollTop;
+          if (delta>8 && el.scrollTop>60) { setImmersiveMode(true); }
+          if (scrollTimer.current) clearTimeout(scrollTimer.current);
+          scrollTimer.current=setTimeout(()=>setImmersiveMode(false),2000);
+        }}
+      >
+        {/* Spacer for fixed toolbar on mobile */}
+        <div className="h-14 md:hidden" />
         <article className={cn('mx-auto px-6 py-10', widthPreset.maxW)}>
           {/* Feed + meta */}
           <div className="flex items-center gap-2 mb-5">
@@ -484,6 +506,8 @@ export default function ArticleReader({ articleId, onBack }: Props) {
             </div>
           )}
         </article>
+        {/* Spacer for fixed bottom nav on mobile */}
+        <div className="h-14 md:hidden" />
       </div>
     </div>
   );

@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, type AiJobType } from '../lib/api';
-import { ArrowLeft, Upload, Download, Trash2, CheckCircle, AlertCircle, Loader2, FolderOpen, Sparkles, Clock, LogOut, KeyRound } from 'lucide-react';
+import { ArrowLeft, Upload, Download, Trash2, CheckCircle, AlertCircle, Loader2, Sparkles, Clock, LogOut, KeyRound } from 'lucide-react';
+import ReadingHeatmap from '../components/ReadingHeatmap';
 
 export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
   const navigate = useNavigate();
-  const { settings, updateSettings, createGroup, groups, deleteGroup, loadFeeds, loadGroups, loadSettings } = useStore();
+  const { settings, updateSettings, loadFeeds, loadGroups, loadSettings } = useStore();
 
   // 当 AI 任务完成时，刷新 settings 以获取最新 token 消耗统计
   useEffect(() => {
@@ -20,9 +21,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [cleanPreview, setCleanPreview] = useState<number | null>(null);
-  const [newGroupName, setNewGroupName] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [groupMsg, setGroupMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [aiTriggering, setAiTriggering] = useState<AiJobType | null>(null);
   const [aiMsg, setAiMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [aiTesting, setAiTesting] = useState(false);
@@ -134,23 +133,10 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
     }
   }
 
-  async function handleCreateGroup(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newGroupName.trim()) return;
-    try {
-      await createGroup(newGroupName.trim());
-      setNewGroupName('');
-      setGroupMsg({ type: 'success', text: `分组「${newGroupName.trim()}」已创建` });
-      setTimeout(() => setGroupMsg(null), 3000);
-    } catch {
-      setGroupMsg({ type: 'error', text: '创建失败，请重试' });
-    }
-  }
-
   if (!settings) return null;
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCF8] overflow-y-auto">
+    <div className="flex flex-col h-full bg-[#FDFCF8] overflow-y-auto pb-[3.5rem] lg:pb-0">
       {/* Header — matches sidebar/article-list height */}
       <div className="bg-[#FEFEFA]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 px-4 py-3.5 flex items-center gap-2.5 sticky top-0 z-10">
         <button
@@ -170,6 +156,31 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
             {successMsg}
           </div>
         )}
+
+        {/* ── OPML ── */}
+        <Section title="导入 / 导出">
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+              className="btn-primary flex items-center gap-1.5 text-xs py-2 px-4"
+            >
+              {importing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+              导入 OPML
+            </button>
+            <input ref={fileRef} type="file" accept=".opml,.xml" className="hidden" onChange={handleImport} />
+            <button onClick={() => api.exportOpml()} className="btn-secondary flex items-center gap-1.5 text-xs py-2 px-4">
+              <Download size={13} />
+              导出 OPML
+            </button>
+          </div>
+          {importResult && (
+            <div className="px-3 py-2 rounded-xl bg-[#5D7052]/10 border border-[#5D7052]/20 text-xs text-[#5D7052] flex items-center gap-2 font-medium">
+              <CheckCircle size={13} />
+              导入完成：成功 <strong>{importResult.imported}</strong> 个，跳过重复 <strong>{importResult.skipped}</strong> 个
+            </div>
+          )}
+        </Section>
 
         {/* ── 外观 & 抓取 (two columns) ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -263,85 +274,9 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
           </Section>
         </div>
 
-        {/* ── OPML ── */}
-        <Section title="导入 / 导出">
-          <div className="flex flex-wrap gap-2.5">
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={importing}
-              className="btn-primary flex items-center gap-1.5 text-xs py-2 px-4"
-            >
-              {importing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-              导入 OPML
-            </button>
-            <input ref={fileRef} type="file" accept=".opml,.xml" className="hidden" onChange={handleImport} />
-            <button onClick={() => api.exportOpml()} className="btn-secondary flex items-center gap-1.5 text-xs py-2 px-4">
-              <Download size={13} />
-              导出 OPML
-            </button>
-          </div>
-          {importResult && (
-            <div className="px-3 py-2 rounded-xl bg-[#5D7052]/10 border border-[#5D7052]/20 text-xs text-[#5D7052] flex items-center gap-2 font-medium">
-              <CheckCircle size={13} />
-              导入完成：成功 <strong>{importResult.imported}</strong> 个，跳过重复 <strong>{importResult.skipped}</strong> 个
-            </div>
-          )}
-        </Section>
-
-
-        {/* ── 分组管理 ── */}
-        <Section title="分组管理">
-          <form onSubmit={handleCreateGroup} className="flex gap-2">
-            <input
-              type="text"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="新建分组名称"
-              className="input-field flex-1 h-8 text-sm px-4"
-            />
-            <button type="submit" className="btn-primary px-4 py-0 h-8 text-xs">创建</button>
-          </form>
-
-          {groupMsg && (
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium ${
-              groupMsg.type === 'success'
-                ? 'bg-[#5D7052]/10 border border-[#5D7052]/20 text-[#5D7052]'
-                : 'bg-[#A85448]/10 border border-[#A85448]/20 text-[#A85448]'
-            }`}>
-              {groupMsg.type === 'success' ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
-              {groupMsg.text}
-            </div>
-          )}
-
-          {groups.length === 0 ? (
-            <p className="text-xs text-[#78786C]/70 py-1">暂无分组</p>
-          ) : (
-            <div className="space-y-1.5">
-              {groups.map((g) => (
-                <div key={g.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#F0EBE5]/50 border border-[#DED8CF]/30">
-                  <div className="w-5 h-5 rounded-full bg-[#5D7052]/15 flex items-center justify-center flex-shrink-0">
-                    <FolderOpen size={11} className="text-[#5D7052]" />
-                  </div>
-                  <span className="flex-1 text-sm text-[#2C2C24]">{g.name}</span>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await deleteGroup(g.id);
-                        setGroupMsg({ type: 'success', text: `分组「${g.name}」已删除` });
-                        setTimeout(() => setGroupMsg(null), 3000);
-                      } catch {
-                        setGroupMsg({ type: 'error', text: '删除失败，请重试' });
-                      }
-                    }}
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-[#78786C]/50 transition-all duration-200 hover:bg-[#A85448]/15 hover:text-[#A85448] active:scale-95"
-                    title="删除分组"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* ── 阅读记录 ── */}
+        <Section title="阅读记录">
+          <ReadingHeatmap />
         </Section>
 
         {/* ── AI 分析 ── */}

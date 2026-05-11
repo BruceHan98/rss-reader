@@ -182,6 +182,9 @@ export const api = {
     window.location.href = BASE + '/opml/export';
   },
 
+  // Stats
+  getReadingStats: () => request<{ stats: Array<{ day: string; count: number }> }>('/stats/reading'),
+
   // Auth
   login: (username: string, password: string) =>
     request<{ ok: boolean; username: string }>('/auth/login', {
