@@ -20,7 +20,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#FDFCF8]">
+    <div className="flex overflow-hidden bg-[#FDFCF8]" style={{height: "100dvh"}}>
       <AiProgressFloat />
       {sidebarOpen && (
         <div
