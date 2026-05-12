@@ -263,10 +263,14 @@ export default function ArticleReader({ articleId, onBack }: Props) {
         placeholder.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>图片加载失败</span>`;
         img.replaceWith(placeholder);
       };
-      // 通过服务端代理加载图片，绕过防盗链（Hotlink Protection）
+      // 通过服务端代理加载图片，绕过防盗链
+      // 传入文章原始 URL 作为 Referer，这是图片最自然的来源页面
       const src = img.getAttribute('src');
       if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
-        img.src = `/api/img-proxy?url=${encodeURIComponent(src)}`;
+        const proxyUrl = article.url
+          ? `/api/img-proxy?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(article.url)}`
+          : `/api/img-proxy?url=${encodeURIComponent(src)}`;
+        img.src = proxyUrl;
       }
     });
   }, [article]);

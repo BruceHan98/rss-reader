@@ -84,9 +84,9 @@ await app.register(aiRoutes);
 
 app.get('/api/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
 
-// ── 图片代理：绕过防盗链，不携带 Referer 转发图片 ──
-app.get<{ Querystring: { url: string } }>('/api/img-proxy', async (req, reply) => {
-  const { url } = req.query;
+// ── 图片代理：绕过防盗链，转发图片 ──
+app.get<{ Querystring: { url: string; referer?: string } }>('/api/img-proxy', async (req, reply) => {
+  const { url, referer } = req.query;
   if (!url) return reply.status(400).send({ error: 'missing url' });
 
   let decoded: string;
@@ -102,21 +102,30 @@ app.get<{ Querystring: { url: string } }>('/api/img-proxy', async (req, reply) =
   const { isPublicUrl } = await import('./services/fetcher.js');
   if (!isPublicUrl(decoded)) return reply.status(403).send({ error: 'forbidden' });
 
-  // 构造备选请求头列表：先不带 Referer，若 403/401 再用主域名 Referer 重试一次
   const baseHeaders = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
   };
-  // 推断图片的「来源主站」Referer（e.g. upload.chinaz.com → https://www.chinaz.com/）
-  const hostParts = parsedUrl.hostname.split('.');
-  const mainHost = hostParts.length > 2
-    ? `${parsedUrl.protocol}//www.${hostParts.slice(-2).join('.')}/`
-    : `${parsedUrl.protocol}//${parsedUrl.host}/`;
 
-  const headerVariants = [
-    baseHeaders,                                          // 1st: 不带 Referer
-    { ...baseHeaders, 'Referer': mainHost },             // 2nd: 主站 Referer
-  ];
+  // 若调用方提供了文章 URL 作为 Referer（最自然的来源），直接使用；
+  // 否则降级策略：先不带 Referer，403/401 时再用图片主域名重试。
+  let headerVariants: Record<string, string>[];
+  if (referer) {
+    const decodedReferer = decodeURIComponent(referer);
+    headerVariants = [
+      { ...baseHeaders, 'Referer': decodedReferer },     // 1st: 文章页 Referer
+      baseHeaders,                                        // 2nd: 无 Referer（兜底）
+    ];
+  } else {
+    const hostParts = parsedUrl.hostname.split('.');
+    const mainHost = hostParts.length > 2
+      ? `${parsedUrl.protocol}//www.${hostParts.slice(-2).join('.')}/`
+      : `${parsedUrl.protocol}//${parsedUrl.host}/`;
+    headerVariants = [
+      baseHeaders,                                        // 1st: 无 Referer
+      { ...baseHeaders, 'Referer': mainHost },            // 2nd: 图片主域名
+    ];
+  }
 
   try {
     let res: Response | null = null;
