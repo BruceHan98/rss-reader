@@ -150,10 +150,12 @@ function loadPref<T extends string>(key: string, fallback: T): T {
 interface Props {
   articleId: string;
   onBack?: () => void;
+  /** Called when the article is marked as read (only when it was unread on load) */
+  onRead?: (articleId: string, feedId: string) => void;
 }
 
-export default function ArticleReader({ articleId, onBack }: Props) {
-  const { loadFeeds, setImmersiveMode, immersiveMode } = useStore();
+export default function ArticleReader({ articleId, onBack, onRead }: Props) {
+  const { setImmersiveMode, immersiveMode } = useStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const isScrolling = useRef(false);
   const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -218,7 +220,7 @@ export default function ArticleReader({ articleId, onBack }: Props) {
         setArticle(a);
         setLoading(false);
         if (!a.isRead) {
-          api.markRead(articleId).then(() => loadFeeds()).catch(() => {});
+          onRead?.(articleId, a.feedId);
         }
         return;
       } catch (err) {

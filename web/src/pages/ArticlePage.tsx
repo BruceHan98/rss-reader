@@ -6,7 +6,7 @@ import ArticleReader from '../components/ArticleReader';
 export default function ArticlePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { setImmersiveMode } = useStore();
+  const { setImmersiveMode, markArticleRead } = useStore();
 
   useEffect(() => () => { setImmersiveMode(false); }, []);
 
@@ -16,6 +16,7 @@ export default function ArticlePage() {
     <ArticleReader
       articleId={id}
       onBack={() => navigate(-1)}
+      onRead={(articleId, feedId) => markArticleRead(articleId, true, feedId).catch(() => {})}
     />
   );
 }

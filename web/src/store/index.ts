@@ -41,7 +41,7 @@ interface AppState {
 
   updateSettings: (data: Partial<Settings>) => Promise<void>;
 
-  markArticleRead: (id: string, isRead?: boolean) => Promise<void>;
+  markArticleRead: (id: string, isRead?: boolean, feedId?: string) => Promise<void>;
   toggleStar: (id: string) => Promise<{ isStarred: boolean }>;
   toggleReadLater: (id: string) => Promise<{ isReadLater: boolean }>;
   markAllRead: (params?: { feedId?: string; groupId?: string }) => Promise<void>;
@@ -125,14 +125,31 @@ export const useStore = create<AppState>((set, get) => ({
     applyFontSettings(updated.fontSize, updated.lineHeight);
   },
 
-  markArticleRead: async (id, isRead = true) => {
-    await api.markRead(id, isRead);
-    if (isRead) {
+  markArticleRead: async (id, isRead = true, feedId?: string) => {
+    if (feedId) {
+      // Optimistically update unreadCount before the API call
       set((s) => ({
-        feeds: s.feeds.map((f) => {
-          return { ...f }; // 重新加载才准确，这里仅触发重渲
-        }),
+        feeds: s.feeds.map((f) =>
+          f.id === feedId
+            ? { ...f, unreadCount: Math.max(0, f.unreadCount + (isRead ? -1 : 1)) }
+            : f
+        ),
       }));
+    }
+    try {
+      await api.markRead(id, isRead);
+    } catch (err) {
+      // Roll back optimistic update on failure
+      if (feedId) {
+        set((s) => ({
+          feeds: s.feeds.map((f) =>
+            f.id === feedId
+              ? { ...f, unreadCount: Math.max(0, f.unreadCount + (isRead ? 1 : -1)) }
+              : f
+          ),
+        }));
+      }
+      throw err;
     }
   },
 

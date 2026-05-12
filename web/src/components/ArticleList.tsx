@@ -12,6 +12,10 @@ export default function ArticleList() {
     filter, selectedArticleId, settings,
     setSelectedArticle, markArticleRead, markAllRead, loadFeeds, setSidebarOpen, sidebarOpen,
   } = useStore();
+
+  // Keep a ref to filter to avoid stale closures in IntersectionObserver callbacks
+  const filterRef = useRef(filter);
+  useEffect(() => { filterRef.current = filter; }, [filter]);
   const navigate = useNavigate();
 
   // 「滚动自动已读」是否开启
@@ -36,6 +40,8 @@ export default function ArticleList() {
   const scrollReadObserverRef = useRef<IntersectionObserver | null>(null);
   // 记录正在观察的文章 id → element，避免重复注册
   const observedArticleIds = useRef<Set<string>>(new Set());
+  // 记录已发起「标为已读」的文章 id，防止 Observer 多次触发导致重复计数
+  const scrollReadPendingIds = useRef<Set<string>>(new Set());
 
   // AI filter refs (to avoid stale closure in loadArticles)
   const minScoreRef = useRef(minScore);
@@ -160,6 +166,7 @@ export default function ArticleList() {
         scrollReadObserverRef.current = null;
       }
       observedArticleIds.current.clear();
+      scrollReadPendingIds.current.clear();
       return;
     }
 
@@ -169,6 +176,7 @@ export default function ArticleList() {
         scrollReadObserverRef.current = null;
       }
       observedArticleIds.current.clear();
+      scrollReadPendingIds.current.clear();
       return;
     }
 
@@ -182,10 +190,16 @@ export default function ArticleList() {
             if (!entry.isIntersecting && entry.rootBounds && entry.boundingClientRect.bottom < entry.rootBounds.top) {
               const id = (entry.target as HTMLElement).dataset.articleId;
               if (!id) continue;
+              // Use ref-based guard to prevent duplicate triggers before React state updates
+              if (scrollReadPendingIds.current.has(id)) continue;
               setArticles((prev) => {
                 const article = prev.find((a) => a.id === id);
                 if (!article || article.isRead) return prev;
-                markArticleRead(id).then(() => loadFeeds()).catch(() => {});
+                scrollReadPendingIds.current.add(id);
+                markArticleRead(id, true, article.feedId).catch(() => {});
+                if (filterRef.current.type === 'unread') {
+                  setTotal((t) => Math.max(0, t - 1));
+                }
                 return prev.map((a) => (a.id === id ? { ...a, isRead: true } : a));
               });
               observer.unobserve(entry.target);
@@ -228,19 +242,18 @@ export default function ArticleList() {
   }, [loading, articles.length, total]);
 
   async function handleSelect(article: Article) {
-    // Mark as read locally
+    // Optimistically update local UI only; API call is handled by ArticleReader via onRead
     if (!article.isRead) {
       setArticles((prev) =>
         prev.map((a) => (a.id === article.id ? { ...a, isRead: true } : a))
       );
+      if (filter.type === 'unread') {
+        setTotal((prev) => Math.max(0, prev - 1));
+      }
     }
 
     setSelectedArticle(article.id);
     navigate(`/article/${article.id}`);
-
-    if (!article.isRead) {
-      markArticleRead(article.id).then(() => loadFeeds()).catch(() => {});
-    }
   }
 
   async function handleRefreshAll() {
@@ -279,6 +292,9 @@ export default function ArticleList() {
       filter.type === 'group' ? { groupId: filter.groupId } : undefined;
     await markAllRead(params);
     setArticles((prev) => prev.map((a) => ({ ...a, isRead: true })));
+    if (filter.type === 'unread') {
+      setTotal(0);
+    }
   }
 
   function toggleTag(tag: string) {
