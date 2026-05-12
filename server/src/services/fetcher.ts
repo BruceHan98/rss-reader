@@ -15,6 +15,20 @@ const parser = new Parser({
     item: [['content:encoded', 'contentEncoded'], ['description', 'description']],
   },
 });
+/** 校验 URL 是否为公网地址，防止 SSRF 攻击 */
+export function isPublicUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (!['http:', 'https:'].includes(u.protocol)) return false;
+    const h = u.hostname;
+    if (/^(localhost|127\.|0\.0\.0\.0|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(h)) return false;
+    if (h === '::1' || h.startsWith('fc') || h.startsWith('fd')) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 async function fetchFullContent(url: string): Promise<string> {
   const attempt = async () => {
@@ -59,7 +73,7 @@ export async function fetchFeed(feed: Feed): Promise<{ count: number; error?: st
       const summary = item.contentSnippet || item.summary || '';
 
       const plainTextLen = content.replace(/<[^>]+>/g, '').trim().length;
-      if (plainTextLen < 200 && item.link) {
+      if (plainTextLen < 200 && item.link && isPublicUrl(item.link)) {
         const fullContent = await fetchFullContent(item.link);
         if (fullContent) content = fullContent;
       }

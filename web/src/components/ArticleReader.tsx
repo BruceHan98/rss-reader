@@ -149,8 +149,9 @@ interface Props {
 export default function ArticleReader({ articleId, onBack }: Props) {
   const { loadFeeds, setImmersiveMode, immersiveMode } = useStore();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isScrolling = useRef(false);
+  const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrollY = useRef(0);
-  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [widthKey, setWidthKey] = useState<WidthKey>(() => loadPref('reader-width', 'md'));
@@ -185,15 +186,23 @@ export default function ArticleReader({ articleId, onBack }: Props) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
+    setArticle(null);
     api.getArticle(articleId).then((a) => {
+      if (cancelled) return;
       setArticle(a);
       setLoading(false);
       // 自动标记已读（无论来源是列表点击还是直接 URL 访问）
       if (!a.isRead) {
         api.markRead(articleId).then(() => loadFeeds()).catch(() => {});
       }
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      if (cancelled) return;
+      console.error("加载文章失败:", err);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, [articleId]);
 
   useEffect(() => {
@@ -255,7 +264,7 @@ export default function ArticleReader({ articleId, onBack }: Props) {
   return (
     <div
       className="flex flex-col h-full bg-[#FDFCF8] overflow-hidden"
-      onClick={(e) => { const t=e.target as HTMLElement; if (t.closest("button,a")) return; setShowWidthPicker(false); setShowFontPicker(false); if (window.innerWidth < 768) setImmersiveMode(false); }}
+      onClick={(e) => { const t=e.target as HTMLElement; if (t.closest("button,a")) return; setShowWidthPicker(false); setShowFontPicker(false); if (window.innerWidth < 768) { if (!isScrolling.current) setImmersiveMode(false); } }}
     >
       {/* Toolbar: fixed on mobile, static on desktop */}
       <div className={cn(
@@ -410,9 +419,18 @@ export default function ArticleReader({ articleId, onBack }: Props) {
           const el=e.currentTarget;
           const delta=el.scrollTop-lastScrollY.current;
           lastScrollY.current=el.scrollTop;
-          if (delta>8 && el.scrollTop>60) { setImmersiveMode(true); }
-          if (scrollTimer.current) clearTimeout(scrollTimer.current);
-          scrollTimer.current=setTimeout(()=>setImmersiveMode(false),2000);
+          // 滚动时进入沉浸模式（离开顶部 40px 以内不隐藏）
+          if (el.scrollTop > 40) {
+            setImmersiveMode(true);
+          }
+          // 标记正在滚动，防止滚动期间 click 触发展示
+          isScrolling.current = true;
+          if (scrollEndTimer.current) clearTimeout(scrollEndTimer.current);
+          scrollEndTimer.current = setTimeout(() => { isScrolling.current = false; }, 200);
+          // 滚动到底部，或向上滚到顶部时展示
+          const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+          const atTop = el.scrollTop <= 40 && delta < 0;
+          if (atBottom || atTop) setImmersiveMode(false);
         }}
       >
         {/* Spacer for fixed toolbar on mobile */}

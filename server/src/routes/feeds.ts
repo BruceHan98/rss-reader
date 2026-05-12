@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import { feeds, groups, articles } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { fetchFeed } from '../services/fetcher.js';
+import { fetchFeed, isPublicUrl } from '../services/fetcher.js';
 
 export async function feedRoutes(app: FastifyInstance) {
   // GET /api/feeds - 获取所有订阅源（含分组信息 + 未读数）
@@ -32,6 +32,7 @@ export async function feedRoutes(app: FastifyInstance) {
   }>('/api/feeds', async (req, reply) => {
     const { url, title, groupId, fetchInterval = 60 } = req.body;
     if (!url) return reply.status(400).send({ error: 'URL 不能为空' });
+    if (!isPublicUrl(url)) return reply.status(400).send({ error: "不支持的 URL：仅允许公网地址" });
 
     // 检查是否已存在
     const existing = await db.select().from(feeds).where(eq(feeds.url, url));

@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
+import rateLimit from '@fastify/rate-limit';
 import { feedRoutes } from './routes/feeds.js';
 import { groupRoutes } from './routes/groups.js';
 import { articleRoutes } from './routes/articles.js';
@@ -15,9 +16,15 @@ import { startScheduler } from './services/scheduler.js';
 
 const app = Fastify({ logger: true });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rss-reader-jwt-secret-please-change-in-production';
+// JWT_SECRET 必须由环境变量提供，不允许使用默认值
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('[FATAL] JWT_SECRET environment variable is not set. Please set it before starting the server.');
+  process.exit(1);
+}
 
-await app.register(cors, { origin: true, credentials: true });
+const allowedOrigins = new Set((process.env.ALLOWED_ORIGIN || 'http://localhost:8080').split(',').map((s: string) => s.trim()));
+await app.register(cors, { origin: (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => { if (!origin || allowedOrigins.has(origin)) return cb(null, true); cb(null, false); }, credentials: true });
 await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 await app.register(fastifyCookie);
 await app.register(fastifyJwt, {
@@ -25,18 +32,25 @@ await app.register(fastifyJwt, {
   cookie: { cookieName: 'token', signed: false },
 });
 
-// ── 统一鉴权：所有 /api/* 路由（除 auth 本身）需要有效 token ──
+// 注册速率限制插件（global:false = 只在路由显式声明时生效，登录路由在 auth.ts 中配置）
+await app.register(rateLimit, {
+  global: false,
+  max: 10,
+  timeWindow: '1 minute',
+  errorResponseBuilder: (_req: unknown, ctx: any) => { const err = new Error('尝试次数过多，请稍后再试') as any; err.statusCode = ctx.statusCode || 429; return err; },
+});
+
+// ── 统一鉴权：所有 /api/* 路由（除明确白名单外）需要有效 token ──
 const PUBLIC_PATHS = new Set([
   '/api/auth/login',
   '/api/auth/logout',
+  '/api/auth/me',
   '/api/health',
 ]);
 
 app.addHook('onRequest', async (req, reply) => {
   if (!req.url.startsWith('/api/')) return;
   if (PUBLIC_PATHS.has(req.url.split('?')[0])) return;
-  // /api/auth/me 也放行（内部自行处理）
-  if (req.url.startsWith('/api/auth/')) return;
   try {
     await req.jwtVerify();
   } catch {

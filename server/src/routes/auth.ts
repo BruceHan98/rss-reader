@@ -6,6 +6,7 @@ export async function authRoutes(app: FastifyInstance) {
   // POST /api/auth/login
   app.post<{ Body: { username: string; password: string } }>(
     '/api/auth/login',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (req, reply) => {
       const { username, password } = req.body || {};
       if (!username || !password) {
@@ -30,6 +31,7 @@ export async function authRoutes(app: FastifyInstance) {
         path: '/',
         maxAge: 30 * 24 * 60 * 60, // 30 days
         sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
       });
 
       return { ok: true, username: user.username };

@@ -1,5 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { sqlite } from '../db/index.js';
+const ALLOWED_SETTINGS_KEYS = new Set([
+  'fetchInterval', 'retentionDays', 'theme', 'fontSize', 'lineHeight',
+  'aiEnabled', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'aiMinScore',
+  'autoAiAfterFetch', 'fetchScheduleMode', 'fetchScheduleTimes',
+]);
+
 
 function getSettings(userId: string) {
   const rows = sqlite
@@ -22,6 +28,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   app.put<{ Body: Record<string, string> }>('/api/settings', async (req) => {
     const userId = getUserId(req);
     for (const [key, value] of Object.entries(req.body)) {
+      if (!ALLOWED_SETTINGS_KEYS.has(key)) continue;
       sqlite
         .prepare('INSERT OR REPLACE INTO settings (user_id, key, value) VALUES (?, ?, ?)')
         .run(userId, key, String(value));

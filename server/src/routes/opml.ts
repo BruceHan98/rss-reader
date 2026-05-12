@@ -12,7 +12,17 @@ export async function opmlRoutes(app: FastifyInstance) {
     const data = await req.file();
     if (!data) return reply.status(400).send({ error: '请上传 OPML 文件' });
 
+    // 校验文件类型
+    const filename = data.filename || "";
+    const mimetype = data.mimetype || "";
+    if (!mimetype.includes("xml") && !filename.toLowerCase().endsWith(".opml") && !filename.toLowerCase().endsWith(".xml")) {
+      return reply.status(400).send({ error: "请上传有效的 OPML/XML 文件" });
+    }
     const buf = await data.toBuffer();
+    // 限制文件内容大小（multipart 已限 10MB，此处再加 2MB 软限制）
+    if (buf.length > 2 * 1024 * 1024) {
+      return reply.status(400).send({ error: "OPML 文件过大，请上传 2MB 以内的文件" });
+    }
     const xml = buf.toString('utf-8');
     const parsed = await parseOpml(xml);
 

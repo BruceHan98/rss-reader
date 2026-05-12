@@ -280,10 +280,17 @@ async function runJob(jobId: string, type: JobType, feedId?: string, groupId?: s
     }
 
     if (Object.keys(updates).length > 0) {
-      const sets = Object.keys(updates).map((k) => `${k} = ?`).join(', ');
-      sqlite
-        .prepare(`UPDATE articles SET ${sets} WHERE id = ?`)
-        .run(...Object.values(updates), row.id);
+      // 使用显式分支替代动态字段名拼接，防止 SQL 注入
+      if (updates.ai_score !== undefined && updates.ai_tags !== undefined) {
+        sqlite.prepare('UPDATE articles SET ai_score = ?, ai_tags = ? WHERE id = ?')
+          .run(updates.ai_score, updates.ai_tags, row.id);
+      } else if (updates.ai_score !== undefined) {
+        sqlite.prepare('UPDATE articles SET ai_score = ? WHERE id = ?')
+          .run(updates.ai_score, row.id);
+      } else if (updates.ai_tags !== undefined) {
+        sqlite.prepare('UPDATE articles SET ai_tags = ? WHERE id = ?')
+          .run(updates.ai_tags, row.id);
+      }
     }
 
     job.processed += 1;
