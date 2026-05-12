@@ -25,8 +25,6 @@ Thumbs.db
 *.tar.gz
 *.zip
 
-# Database files
-server/data/*.db
-server/data/*.db-shm
-server/data/*.db-wal
-server/data/*.sqlite
+# Runtime data (database, secrets, uploads)
+data/
+server/data/
