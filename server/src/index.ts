@@ -102,22 +102,40 @@ app.get<{ Querystring: { url: string } }>('/api/img-proxy', async (req, reply) =
   const { isPublicUrl } = await import('./services/fetcher.js');
   if (!isPublicUrl(decoded)) return reply.status(403).send({ error: 'forbidden' });
 
+  // 构造备选请求头列表：先不带 Referer，若 403/401 再用主域名 Referer 重试一次
+  const baseHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+  };
+  // 推断图片的「来源主站」Referer（e.g. upload.chinaz.com → https://www.chinaz.com/）
+  const hostParts = parsedUrl.hostname.split('.');
+  const mainHost = hostParts.length > 2
+    ? `${parsedUrl.protocol}//www.${hostParts.slice(-2).join('.')}/`
+    : `${parsedUrl.protocol}//${parsedUrl.host}/`;
+
+  const headerVariants = [
+    baseHeaders,                                          // 1st: 不带 Referer
+    { ...baseHeaders, 'Referer': mainHost },             // 2nd: 主站 Referer
+  ];
+
   try {
-    const res = await fetch(decoded, {
-      redirect: 'follow',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        // 传递同域 Referer，部分防盗链需要 Referer 为图片所在域名
-        'Referer': `${parsedUrl.protocol}//${parsedUrl.host}/`,
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return reply.status(res.status).send();
+    let res: Response | null = null;
+    for (const headers of headerVariants) {
+      res = await fetch(decoded, {
+        redirect: 'follow',
+        headers,
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) break;
+      // 只在 403/401 时尝试下一组头，其他错误直接返回
+      if (res.status !== 403 && res.status !== 401) {
+        return reply.status(res.status).send();
+      }
+    }
+    if (!res || !res.ok) return reply.status(res?.status ?? 502).send();
 
     const contentType = res.headers.get('content-type') || 'image/jpeg';
     // 放宽 content-type 检查：部分服务器返回 application/octet-stream 或其他非标准类型
-    // 通过文件扩展名或响应头双重判断
     const ext = parsedUrl.pathname.split('.').pop()?.toLowerCase() ?? '';
     const imageExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp', 'tiff']);
     const isImage = contentType.startsWith('image/') ||

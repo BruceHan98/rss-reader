@@ -9,10 +9,13 @@ const PAGE_SIZE = 30;
 
 export default function ArticleList() {
   const {
-    filter, selectedArticleId,
+    filter, selectedArticleId, settings,
     setSelectedArticle, markArticleRead, markAllRead, loadFeeds, setSidebarOpen, sidebarOpen,
   } = useStore();
   const navigate = useNavigate();
+
+  // 「滚动自动已读」是否开启
+  const markReadOnScroll = settings?.markReadOnScroll === 'true';
 
   // AI filter state
   const [minScore, setMinScore] = useState(0);
@@ -29,6 +32,10 @@ export default function ArticleList() {
 
   const loaderRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // 用于滚动自动已读的 observer
+  const scrollReadObserverRef = useRef<IntersectionObserver | null>(null);
+  // 记录正在观察的文章 id → element，避免重复注册
+  const observedArticleIds = useRef<Set<string>>(new Set());
 
   // AI filter refs (to avoid stale closure in loadArticles)
   const minScoreRef = useRef(minScore);
@@ -135,6 +142,72 @@ export default function ArticleList() {
     window.addEventListener('ai-job-done', onAiDone);
     return () => window.removeEventListener('ai-job-done', onAiDone);
   }, []);
+
+  // 滚动自动已读：当文章条目向上滚出滚动容器时标为已读
+  // 用 ref 解决 IntersectionObserver 回调中的 stale closure 问题
+  const markReadOnScrollRef = useRef(markReadOnScroll);
+  useEffect(() => { markReadOnScrollRef.current = markReadOnScroll; }, [markReadOnScroll]);
+
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const isEmpty = articles.length === 0;
+
+    // filter 切换时（articles 变为空）销毁旧 observer，等下次有文章时再重建
+    if (isEmpty) {
+      if (scrollReadObserverRef.current) {
+        scrollReadObserverRef.current.disconnect();
+        scrollReadObserverRef.current = null;
+      }
+      observedArticleIds.current.clear();
+      return;
+    }
+
+    if (!container || !markReadOnScroll) {
+      if (scrollReadObserverRef.current) {
+        scrollReadObserverRef.current.disconnect();
+        scrollReadObserverRef.current = null;
+      }
+      observedArticleIds.current.clear();
+      return;
+    }
+
+    // 有文章 & 功能开启：按需创建 observer
+    if (!scrollReadObserverRef.current) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (!markReadOnScrollRef.current) return;
+          for (const entry of entries) {
+            // 文章完全离开滚动容器顶部（向上滚出）
+            if (!entry.isIntersecting && entry.rootBounds && entry.boundingClientRect.bottom < entry.rootBounds.top) {
+              const id = (entry.target as HTMLElement).dataset.articleId;
+              if (!id) continue;
+              setArticles((prev) => {
+                const article = prev.find((a) => a.id === id);
+                if (!article || article.isRead) return prev;
+                markArticleRead(id).then(() => loadFeeds()).catch(() => {});
+                return prev.map((a) => (a.id === id ? { ...a, isRead: true } : a));
+              });
+              observer.unobserve(entry.target);
+              observedArticleIds.current.delete(id);
+            }
+          }
+        },
+        { root: container, threshold: 0 }
+      );
+      scrollReadObserverRef.current = observer;
+    }
+
+    // 将尚未注册的文章条目加入观察
+    container.querySelectorAll('[data-article-id]').forEach((el) => {
+      const id = (el as HTMLElement).dataset.articleId!;
+      if (!observedArticleIds.current.has(id)) {
+        scrollReadObserverRef.current!.observe(el);
+        observedArticleIds.current.add(id);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [articles, markReadOnScroll]);
 
   // Infinite scroll
   const pageRef = useRef(page);
