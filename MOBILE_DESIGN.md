@@ -1,7 +1,7 @@
 # RSS Reader — 移动端（Android）设计文档
 
-> 版本：V1.0
-> 创建日期：2026-05-11
+> 版本：V2.0
+> 创建日期：2026-05-12
 > 对应里程碑：V1.2（基础功能）+ V1.3（推送与手势增强）
 
 ---
@@ -12,7 +12,7 @@
 2. [技术选型与架构](#2-技术选型与架构)
 3. [目录结构](#3-目录结构)
 4. [数据架构](#4-数据架构)
-5. [网络与同步策略](#5-网络与同步策略)
+5. [RSS 抓取与解析策略](#5-rss-抓取与解析策略)
 6. [导航结构与路由](#6-导航结构与路由)
 7. [页面与组件设计](#7-页面与组件设计)
 8. [手势交互](#8-手势交互)
@@ -21,7 +21,7 @@
 11. [离线与缓存策略](#11-离线与缓存策略)
 12. [设计风格](#12-设计风格)
 13. [状态管理](#13-状态管理)
-14. [API 对接层](#14-api-对接层)
+14. [RSS 服务层](#14-rss-服务层)
 15. [错误处理与边界情况](#15-错误处理与边界情况)
 16. [性能指标与优化](#16-性能指标与优化)
 17. [打包与发布](#17-打包与发布)
@@ -33,23 +33,24 @@
 
 ### 1.1 目标
 
-基于现有后端 REST API，开发 RSS Reader Android 原生应用。应用运行在用户自托管的后端服务之上（Docker 部署），通过局域网或公网地址访问。
+开发完全独立的 RSS Reader Android 原生应用。应用**不依赖任何后端服务**，所有功能（RSS 抓取、解析、存储、搜索、AI 分析）均在 App 本地实现，可在无服务器环境下独立运行。
 
 ### 1.2 核心功能范围
 
 | 功能模块 | V1.2（基础） | V1.3（增强） |
 |--------|:-----------:|:-----------:|
-| 服务器地址配置 + 登录 | ✅ | — |
+| 添加订阅源（RSS/Atom URL） | ✅ | — |
+| 本地 RSS 抓取与解析 | ✅ | — |
 | 时间线（文章流） | ✅ | — |
 | 文章阅读视图 | ✅ | — |
-| 订阅源管理 | ✅ | — |
+| 订阅源管理（分组/编辑/删除） | ✅ | — |
 | 收藏 / 稍后阅读 | ✅ | — |
-| 搜索 | ✅ | — |
-| 本地 SQLite 离线存储 | ✅ | — |
-| 设置页（外观 + 同步） | ✅ | — |
-| AI 打分/标签展示 | ✅ | — |
+| 全文搜索（本地 FTS5） | ✅ | — |
+| 本地 SQLite 存储 | ✅ | — |
+| 设置页（外观 + 刷新策略） | ✅ | — |
+| AI 打分/标签（本地推断） | ✅ | — |
 | 原生手势（左滑/右滑/下拉刷新） | — | ✅ |
-| 推送通知（FCM） | — | ✅ |
+| 本地推送通知（新文章提醒） | — | ✅ |
 | 后台静默刷新 | — | ✅ |
 | 图片离线缓存 | — | ✅ |
 
@@ -71,14 +72,14 @@
 | 语言 | TypeScript 5.x | 严格类型模式 |
 | 导航 | Expo Router v3（文件路由） | 基于 React Navigation |
 | 状态管理 | Zustand 4.x | 与 Web 端 Store 结构对齐 |
-| 本地数据库 | expo-sqlite + Drizzle ORM | 与后端 Schema 保持一致 |
-| 网络请求 | axios 1.x | 统一拦截器，Bearer Token 注入 |
-| 推送通知 | expo-notifications + FCM | Android 推送（V1.3） |
+| 本地数据库 | expo-sqlite + Drizzle ORM | 唯一数据存储层，含 FTS5 全文搜索 |
+| RSS 解析 | react-native-rss-parser / fast-xml-parser | 解析 RSS 2.0 / Atom 1.0 / JSON Feed |
+| HTTP 抓取 | expo-fetch（内置）/ axios 1.x | 直接请求订阅源 URL，无需认证 |
+| 推送通知 | expo-notifications | 本地通知（无需 FCM），新文章后台提醒 |
 | 后台刷新 | expo-background-fetch | 静默更新文章（V1.3） |
 | 应用内浏览器 | expo-web-browser | 打开原文，支持系统分享 |
 | HTML 渲染 | react-native-render-html | 文章正文 HTML 渲染 |
 | 图片缓存 | expo-image（内置磁盘缓存） | 流量优化 + 离线图片（V1.3） |
-| 安全存储 | expo-secure-store | 存储 JWT Token 和服务器地址 |
 | 手势处理 | react-native-gesture-handler + Reanimated 3 | 滑动手势（V1.3） |
 | 打包发布 | EAS Build + EAS Submit | Expo Application Services |
 
@@ -90,42 +91,41 @@
 |                                                     |
 |  +---------------+    +----------------------+      |
 |  |   UI 层        |    |  本地 SQLite           |      |
-|  |  Expo Router   |    |  (离线存储)             |      |
-|  |  + 组件        |    |                      |      |
+|  |  Expo Router   |    |  (唯一数据存储)         |      |
+|  |  + 组件        |    |  FTS5 全文搜索          |      |
 |  +-------+-------+    +-----------+----------+      |
 |          |                        |                  |
 |  +-------v------------------------v--------+         |
 |  |            Zustand Store 层              |         |
-|  |   (feeds / articles / settings / auth)  |         |
+|  |   (feeds / articles / settings)         |         |
 |  +-------------------+---------------------+         |
 |                      |                               |
 |  +-------------------v---------------------+         |
-|  |          SyncService 同步服务              |         |
-|  |  在线：调用后端 API -> upsert 本地 SQLite   |         |
-|  |  离线：直接读本地 SQLite，操作入 pending 队列 |         |
+|  |          RSSService（本地 RSS 引擎）        |         |
+|  |  fetchFeed(url) -> 解析 XML/JSON           |         |
+|  |  upsert 文章到本地 SQLite                  |         |
+|  |  本地 AI 评分/标签推断                      |         |
 |  +-------------------+---------------------+         |
-+----------------------+-----------------------------+
-                       | REST API（HTTP/HTTPS）
-                       | Authorization: Bearer {token}
-+-----------------------v----------------------------+
-|              后端服务（Node.js + Fastify）           |
-|            用户自托管，应用内配置服务器地址              |
-+-----------------------------------------------------+
+|                      |                               |
+|          HTTP 直连订阅源 URL（互联网）                 |
++---------------------------------------------------+
 ```
+
+> **无服务器依赖**：所有数据流均在设备本地闭环，不需要任何中间后端服务。
 
 ### 2.3 关键设计决策
 
-**1. 本地优先（Local-First）**
-文章数据写入本地 SQLite，UI 始终从本地读取，后台静默向服务端同步。离线时可完整浏览已缓存文章。
+**1. 完全本地化（Fully Local）**
+App 直接通过 HTTP 请求订阅源 URL，在本地完成 XML/Atom/JSON Feed 解析、去重、存储，无需外部服务器。UI 始终从本地 SQLite 读取。
 
-**2. Bearer Token 认证**
-移动端使用 `Authorization: Bearer <token>` 头，而非 Web 端的 httpOnly Cookie。后端已有 JWT 逻辑，仅需在登录接口响应体中同时返回 `token` 字段（见附录适配清单第 1 条）。
+**2. 无账户体系**
+不需要用户名/密码登录。所有数据存储在设备本地，可选支持导出/导入 OPML 备份。
 
-**3. 服务器地址可配**
-应用内提供服务器地址输入页，Token 和地址均存储于 `expo-secure-store`，支持用户随时更换自托管实例。
+**3. 本地 AI 评分**
+基于关键词规则或轻量本地模型（ONNX Runtime Mobile）对文章质量打分并添加标签，无需调用外部 API。
 
-**4. 离线操作队列**
-离线时对文章的状态操作（已读/收藏/稍后阅读）写入本地 `pending_actions` 表，网络恢复后自动批量同步至服务端。
+**4. 订阅源直连**
+每个订阅源 URL 直接由 App 发起 HTTP 请求。支持 `If-Modified-Since` / `ETag` 条件请求节省流量。
 
 ---
 
@@ -134,9 +134,8 @@
 ```
 mobile/
 ├── app/                          # Expo Router 文件路由
-│   ├── _layout.tsx               # 根布局（字体加载、鉴权守卫、主题）
-│   ├── login.tsx                 # 登录页
-│   ├── server-setup.tsx          # 服务器地址配置页（首次使用）
+│   ├── _layout.tsx               # 根布局（字体加载、主题）
+│   ├── onboarding.tsx            # 首次使用引导页（添加第一个订阅源）
 │   ├── (tabs)/                   # 底部 Tab 导航组
 │   │   ├── _layout.tsx           # Tab 布局（图标、标题、未读徽章）
 │   │   ├── index.tsx             # 时间线页（默认首页）
@@ -157,33 +156,34 @@ mobile/
 │   ├── TagBadge.tsx              # AI 标签气泡
 │   ├── ScoreBadge.tsx            # AI 质量分徽章
 │   ├── FaviconImage.tsx          # 订阅源图标（含降级占位）
-│   ├── OfflineBanner.tsx         # 顶部离线状态提示条
+│   ├── AddFeedSheet.tsx          # 添加订阅源底部 Sheet
 │   └── ThemedView.tsx            # 主题感知容器
 ```
 
 ```
 ├── store/                        # Zustand Store
-│   ├── authStore.ts
 │   ├── feedsStore.ts
 │   ├── articlesStore.ts
 │   └── settingsStore.ts
 ├── services/                     # 业务服务层
-│   ├── api.ts                    # axios 实例 + 拦截器
-│   ├── syncService.ts            # 增量同步逻辑
+│   ├── rssService.ts             # RSS 抓取 + 解析核心引擎
+│   ├── aiScorer.ts               # 本地 AI 评分/标签推断
+│   ├── opmlService.ts            # OPML 导入/导出
 │   ├── backgroundFetch.ts        # 后台刷新任务（V1.3）
-│   └── pushNotification.ts       # 推送注册与处理（V1.3）
+│   └── pushNotification.ts       # 本地推送通知（V1.3）
 ├── db/                           # 本地数据库
 │   ├── index.ts                  # SQLite 连接初始化
-│   ├── schema.ts                 # Drizzle Schema（与后端对齐）
+│   ├── schema.ts                 # Drizzle Schema
 │   └── migrations/               # 本地迁移文件
 ├── hooks/                        # 自定义 Hook
 │   ├── useArticles.ts
 │   ├── useFeeds.ts
-│   ├── useSync.ts
+│   ├── useRefresh.ts
 │   └── useTheme.ts
 ├── lib/                          # 工具函数
 │   ├── relativeTime.ts
 │   ├── htmlSanitize.ts
+│   ├── feedDetector.ts           # 从网页 URL 自动探测 Feed 地址
 │   └── constants.ts
 ├── assets/                       # 静态资源
 │   ├── icon.png                  # 应用图标 1024x1024
@@ -202,16 +202,16 @@ mobile/
 
 ### 4.1 本地 SQLite Schema
 
-与后端 Schema 字段保持一致，额外增加移动端特有字段（`synced_at`、`content_cached`）。
+所有数据均存储在设备本地 SQLite，无需与任何服务端同步。
 
 ```typescript
 // db/schema.ts
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 export const articles = sqliteTable("articles", {
-  id:            text("id").primaryKey(),
+  id:            text("id").primaryKey(),          // guid 的 SHA-256 哈希
   feedId:        text("feed_id").notNull(),
-  guid:          text("guid").notNull(),
+  guid:          text("guid").notNull().unique(),
   title:         text("title").notNull(),
   summary:       text("summary"),
   content:       text("content"),
@@ -222,24 +222,26 @@ export const articles = sqliteTable("articles", {
   isStarred:     integer("is_starred", { mode: "boolean" }).default(false),
   isReadLater:   integer("is_read_later", { mode: "boolean" }).default(false),
   aiScore:       integer("ai_score"),
-  aiTags:        text("ai_tags"),
+  aiTags:        text("ai_tags"),                  // JSON 数组字符串
   createdAt:     integer("created_at", { mode: "timestamp" }),
-  syncedAt:      integer("synced_at", { mode: "timestamp" }),
+  fetchedAt:     integer("fetched_at", { mode: "timestamp" }),
   contentCached: integer("content_cached", { mode: "boolean" }).default(false),
 });
 ```
 
 ```typescript
 export const feeds = sqliteTable("feeds", {
-  id:            text("id").primaryKey(),
-  title:         text("title").notNull(),
-  url:           text("url").notNull(),
-  siteUrl:       text("site_url"),
-  favicon:       text("favicon"),
-  groupId:       text("group_id"),
-  lastFetchedAt: integer("last_fetched_at", { mode: "timestamp" }),
-  errorCount:    integer("error_count").default(0),
-  syncedAt:      integer("synced_at", { mode: "timestamp" }),
+  id:             text("id").primaryKey(),          // URL 的 SHA-256 哈希
+  title:          text("title").notNull(),
+  url:            text("url").notNull().unique(),   // RSS Feed URL
+  siteUrl:        text("site_url"),
+  favicon:        text("favicon"),
+  groupId:        text("group_id"),
+  lastFetchedAt:  integer("last_fetched_at", { mode: "timestamp" }),
+  lastEtag:       text("last_etag"),               // HTTP ETag 缓存
+  lastModified:   text("last_modified"),           // HTTP Last-Modified 缓存
+  errorCount:     integer("error_count").default(0),
+  lastError:      text("last_error"),
 });
 
 export const groups = sqliteTable("groups", {
@@ -247,85 +249,99 @@ export const groups = sqliteTable("groups", {
   name:      text("name").notNull(),
   sortOrder: integer("sort_order").default(0),
 });
-
-export const syncMeta = sqliteTable("sync_meta", {
-  key:       text("key").primaryKey(),
-  value:     text("value"),
-  updatedAt: integer("updated_at", { mode: "timestamp" }),
-});
 ```
 
-### 4.2 离线操作队列
+### 4.2 FTS5 全文搜索
 
-```typescript
-export const pendingActions = sqliteTable("pending_actions", {
-  id:        integer("id").primaryKey({ autoIncrement: true }),
-  type:      text("type").notNull(),
-  articleId: text("article_id").notNull(),
-  payload:   text("payload"),
-  createdAt: integer("created_at", { mode: "timestamp" }),
-});
+```sql
+-- 在 db/migrations/0001_fts.sql 中创建
+CREATE VIRTUAL TABLE articles_fts USING fts5(
+  title,
+  summary,
+  content,
+  content='articles',
+  content_rowid='rowid'
+);
+
+-- 触发器保持 FTS 与主表同步
+CREATE TRIGGER articles_ai AFTER INSERT ON articles BEGIN
+  INSERT INTO articles_fts(rowid, title, summary, content)
+    VALUES (new.rowid, new.title, new.summary, new.content);
+END;
+CREATE TRIGGER articles_ad AFTER DELETE ON articles BEGIN
+  INSERT INTO articles_fts(articles_fts, rowid, title, summary, content)
+    VALUES ('delete', old.rowid, old.title, old.summary, old.content);
+END;
 ```
 
 ### 4.3 本地数据库索引
 
 ```sql
-CREATE INDEX idx_articles_feed_pub ON articles(feed_id, published_at DESC);
-CREATE INDEX idx_articles_read_pub ON articles(is_read, published_at DESC);
-CREATE INDEX idx_articles_starred  ON articles(is_starred, published_at DESC);
-CREATE INDEX idx_articles_score    ON articles(ai_score);
+CREATE INDEX idx_articles_feed_pub  ON articles(feed_id, published_at DESC);
+CREATE INDEX idx_articles_read_pub  ON articles(is_read, published_at DESC);
+CREATE INDEX idx_articles_starred   ON articles(is_starred, published_at DESC);
+CREATE INDEX idx_articles_score     ON articles(ai_score DESC);
+CREATE UNIQUE INDEX idx_articles_guid ON articles(guid);
 ```
 
 ---
 
-## 5. 网络与同步策略
+## 5. RSS 抓取与解析策略
 
-### 5.1 认证流程
-
-```
-1. 用户输入服务器地址（如 http://192.168.1.100:3000）
-2. GET {serverUrl}/api/health  测试连通性（超时 5s）
-3. POST {serverUrl}/api/auth/login  { username, password }
-4. 响应：{ token: "eyJ..." }
-5. token    -> expo-secure-store（key: auth_token）
-   serverUrl -> expo-secure-store（key: server_url）
-6. 后续请求：Authorization: Bearer {token}
-```
-
-> 后端适配：`/api/auth/login` 需在响应体中增加 `token` 字段（详见附录第 1 条）。
-
-### 5.2 同步流程
+### 5.1 RSSService 核心流程
 
 ```
-触发：应用启动 / 用户下拉刷新 / Background Fetch
+触发：用户下拉刷新 / 定时 Background Fetch / 手动刷新单源
 
-1. GET /api/feeds  ->  upsert 本地 feeds / groups
-2. GET /api/articles?limit=200  ->  upsert 本地 articles
-3. 处理 pending_actions（逐条调用 API，成功后删除记录）
-4. 更新 syncMeta.last_articles_sync = now()
-5. 刷新 Zustand Store -> UI 自动响应
+1. 读取本地 feeds 表（含 lastEtag / lastModified）
+2. 发起 HTTP GET {feedUrl}
+   - 请求头：If-None-Match: {etag}，If-Modified-Since: {lastModified}
+   - 超时：10s，User-Agent: RSSReaderApp/1.0
+3. 响应 304 Not Modified -> 跳过，更新 lastFetchedAt
+4. 响应 200 -> 解析 XML/Atom/JSON Feed
+5. 逐条文章按 guid 去重 -> upsert articles 表
+6. 调用 aiScorer.score(article) -> 写入 ai_score / ai_tags
+7. 更新 feeds.lastEtag / lastModified / lastFetchedAt / errorCount
+8. 更新 FTS5 索引
+9. 刷新 Zustand Store -> UI 自动响应
 ```
 
-### 5.3 离线操作同步
+### 5.2 Feed 格式支持
+
+| 格式 | 解析方式 |
+|------|---------|
+| RSS 2.0 | fast-xml-parser，映射 `<item>` 字段 |
+| Atom 1.0 | fast-xml-parser，映射 `<entry>` 字段 |
+| JSON Feed 1.1 | 原生 JSON.parse，映射 `items` 数组 |
+
+### 5.3 自动探测 Feed 地址
+
+用户输入的是普通网站 URL 时，`feedDetector.ts` 自动探测：
 
 ```
-网络断开：
-  操作 -> 本地 SQLite 乐观更新 + 写 pending_actions + 展示 OfflineBanner
-
-网络恢复（NetInfo 事件）：
-  -> 批量同步 pending_actions
-  -> 成功：删除记录；失败：保留重试
-  -> 冲突策略：本地最新状态优先
+1. 请求网页 HTML
+2. 解析 <link rel="alternate" type="application/rss+xml"> / type="application/atom+xml"
+3. 找到则自动填充 Feed URL
+4. 未找到则提示用户手动输入 Feed 地址
 ```
 
-### 5.4 错误处理
+### 5.4 并发控制
 
-| 错误 | 处理方式 |
-|------|----------|
-| 无网络 | 读本地，展示 OfflineBanner |
-| 超时 | 自动重试 1 次，失败 Toast |
-| HTTP 401 | 清除 Token，跳转登录 |
-| HTTP 5xx | Toast 提示，保持 UI |
+```typescript
+// 最多同时抓取 3 个订阅源，避免占满网络
+const CONCURRENCY = 3;
+await pLimit(CONCURRENCY)(feeds.map(feed => () => rssService.fetchFeed(feed)));
+```
+
+### 5.5 错误处理
+
+| 错误 | 处理 |
+|------|------|
+| 无网络 | 展示本地数据，显示 OfflineBanner |
+| 超时（>10s） | errorCount + 1，下次降级刷新频率 |
+| HTTP 4xx | errorCount + 1，记录 lastError，Toast 提示 |
+| 解析失败 | 记录 lastError，跳过该源，继续其他源 |
+| errorCount >= 5 | 自动暂停该订阅源，UI 标记为「异常」 |
 
 ---
 
@@ -335,9 +351,8 @@ CREATE INDEX idx_articles_score    ON articles(ai_score);
 
 ```
 /
-├── server-setup         服务器配置（未配置时强制跳转）
-├── login                登录（未登录时跳转）
-└── (tabs)               主界面（已登录）
+├── onboarding           首次使用引导（无订阅源时自动跳转）
+└── (tabs)               主界面
     ├── index            时间线（默认 Tab）
     ├── feeds            订阅源管理
     ├── starred          收藏
@@ -347,6 +362,8 @@ CREATE INDEX idx_articles_score    ON articles(ai_score);
 /search                  搜索（堆叠）
 /feed/[id]               单订阅源文章列表（堆叠）
 ```
+
+> 移除了 `server-setup` 和 `login` 路由，无需任何认证流程。
 
 ### 6.2 底部 Tab 设计
 
@@ -361,43 +378,33 @@ CREATE INDEX idx_articles_score    ON articles(ai_score);
 
 ## 7. 页面与组件设计
 
-### 7.1 服务器配置页（server-setup.tsx）
+### 7.1 首次使用引导页（onboarding.tsx）
 
-首次安装或服务器配置被清除时强制跳转此页。
+首次安装且无任何订阅源时跳转此页。
 
 ```
 +-----------------------------------+
 |  [Logo]  RSS Reader               |
-|  连接你的 RSS 服务器                |
+|  添加你的第一个订阅源              |
 |                                   |
-|  服务器地址                        |
-|  [ http://...                 ]   |
-|  [错误提示，内联]                   |
+|  订阅源地址（RSS/Atom/网页URL）    |
+|  [ https://...               ]    |
+|  [错误提示，内联]                  |
 |                                   |
-|  [ 连 接 服 务 器 ]                |
+|  [ 添 加 订 阅 源 ]               |
+|                                   |
+|  或 [导入 OPML 文件]              |
 +-----------------------------------+
 ```
 
-交互：GET /api/health 测试连通 -> 成功存储跳转登录，失败内联错误。
+交互：
+- 输入 URL -> 自动探测 Feed 地址 -> 显示订阅源名称预览
+- 点击「添加」-> 首次抓取 -> 进入时间线
+- 「导入 OPML」-> 文件选择器 -> 批量添加
 
 ---
 
-### 7.2 登录页（login.tsx）
-
-```
-+-----------------------------------+
-|  RSS Reader  欢迎回来              |
-|  [ 用户名输入框 ]                  |
-|  [ 密码输入框  [眼睛图标] ]         |
-|  [错误提示，内联]                   |
-|  [ 登 录 ]                         |
-|  更换服务器地址                     |
-+-----------------------------------+
-```
-
----
-
-### 7.3 时间线页（tabs/index.tsx）
+### 7.2 时间线页（tabs/index.tsx）
 
 顶部：`时间线 [筛选▼] [搜索] [刷新]`
 快速筛选 Tab：`[全部] [未读] [星标] [稍后阅读]`
@@ -408,11 +415,11 @@ CREATE INDEX idx_articles_score    ON articles(ai_score);
 - AI 标签多选（横向列表）
 - 「清除全部筛选」
 
-文章列表：FlatList，每页 30 条，下拉刷新，上拉加载更多。
+文章列表：FlatList，每页 30 条，下拉刷新（触发 RSS 抓取），上拉加载更多。
 
 ---
 
-### 7.4 文章卡片（ArticleCard.tsx）
+### 7.3 文章卡片（ArticleCard.tsx）
 
 ```
 +-----------------------------------------------+
@@ -429,7 +436,7 @@ CREATE INDEX idx_articles_score    ON articles(ai_score);
 
 ---
 
-### 7.5 文章阅读页（article/[id].tsx）
+### 7.4 文章阅读页（article/[id].tsx）
 
 导航栏：`[←]  文章阅读  [☆] [书签] [分享] [更多]`
 
@@ -441,40 +448,46 @@ CREATE INDEX idx_articles_score    ON articles(ai_score);
 
 阅读设置 Sheet（更多）：字体大小 / 行距 / 主题
 
-进入时自动调用 `PUT /api/articles/:id/read`。
+进入时自动标记文章为已读（本地 SQLite 更新，无需网络）。
 
 ---
 
-### 7.6 订阅源管理页（tabs/feeds.tsx）
+### 7.5 订阅源管理页（tabs/feeds.tsx）
 
 SectionList 按分组展示，操作：
 - 点击订阅源 -> /feed/[id]
-- 长按 -> ActionSheet（编辑/刷新/删除）
-- 点击 `+` -> 底部 Sheet 添加订阅源
-- 点击刷新按钮 -> 全量刷新
+- 长按 -> ActionSheet（编辑/立即刷新/删除）
+- 点击 `+` -> AddFeedSheet 添加订阅源
+- 点击刷新按钮 -> 全量刷新所有订阅源
 - 长按分组 -> 重命名/删除
+
+订阅源状态指示：
+- 正常：绿点
+- 异常（errorCount ≥ 5）：红点 + 错误描述
 
 ---
 
-### 7.7 收藏页（tabs/starred.tsx）
+### 7.6 收藏页（tabs/starred.tsx）
 
 is_starred=true 的文章列表，同 ArticleCard 样式。右上角「全部标记已读」。
 
 ---
 
-### 7.8 搜索页（search.tsx）
+### 7.7 搜索页（search.tsx）
 
-输入防抖 300ms，历史搜索词（AsyncStorage，最多 10 条），关键词高亮（secondary 色）。
+输入防抖 300ms，使用本地 FTS5 全文搜索（标题 + 摘要 + 正文），历史搜索词（本地持久化，最多 10 条），关键词高亮（secondary 色）。
 
 ---
 
-### 7.9 设置页（tabs/settings.tsx）
+### 7.8 设置页（tabs/settings.tsx）
 
 **外观**：主题（跟随系统/亮色/暗色）、字体大小、行距
-**同步**：后台刷新开关、刷新间隔、仅 Wi-Fi 刷新/加载图片、文章保留天数
-**通知**（V1.3）：推送开关、按订阅源配置
-**存储**：缓存条数、清理图片缓存（V1.3）
-**账户**：服务器地址、用户名、修改密码、退出登录
+**刷新策略**：后台刷新开关、刷新间隔、仅 Wi-Fi 刷新/加载图片
+**通知**（V1.3）：本地推送开关、按订阅源配置
+**存储**：文章保留天数、清理图片缓存、当前占用磁盘空间
+**数据管理**：导出 OPML、导入 OPML、清除所有数据
+
+> 移除了账户/服务器相关设置项，新增数据管理（OPML 导入/导出）。
 
 ---
 
@@ -491,7 +504,7 @@ is_starred=true 的文章列表，同 ArticleCard 样式。右上角「全部标
 
 ### 8.2 下拉刷新
 
-RefreshControl，指示器颜色 primary #5D7052，刷新完成 Toast 3 秒。
+RefreshControl，触发所有订阅源的 RSS 抓取，指示器颜色 primary #5D7052，刷新完成 Toast 3 秒显示新增文章数。
 
 ### 8.3 文章阅读手势
 
@@ -502,32 +515,28 @@ RefreshControl，指示器颜色 primary #5D7052，刷新完成 Toast 3 秒。
 
 ## 9. 推送通知（V1.3）
 
-### 9.1 FCM 集成流程
+### 9.1 本地通知流程
+
+使用 `expo-notifications` 本地通知，**无需 FCM，无需后端**。
 
 ```
 1. 设置页开启通知
 2. requestPermissionsAsync()
-3. getDevicePushTokenAsync() -> FCM Token
-4. POST /api/devices/register { token, platform: android }
-5. 后端拉取新文章 -> FCM API 推送
-6. 收到推送：前台 Banner / 后台系统通知栏
-7. 点击通知 -> 深链接 -> /article/[id]
+3. Background Fetch 拉取新文章后
+   -> 统计新文章数量
+   -> 调用 scheduleNotificationAsync() 发送本地通知
+4. 前台：Banner 提示；后台：系统通知栏
+5. 点击通知 -> 深链接 -> 时间线（高亮新文章）或 /article/[id]
 ```
 
-### 9.2 需后端新增接口
+### 9.2 通知内容规范
 
-| 接口 | 说明 |
-|------|------|
-| POST /api/devices/register | 注册 FCM Token |
-| DELETE /api/devices/:token | 注销 Token |
-| PUT /api/devices/:token/prefs | per-feed 通知偏好 |
+- 标题：RSS Reader — 有 N 篇新文章
+- 正文：[订阅源名称] 最新文章标题
+- 大图标：应用图标
+- 点击：打开时间线并滚动至最新文章
 
-### 9.3 通知内容规范
-
-标题：[订阅源名称] 有 N 篇新文章
-正文：最新文章标题
-大图标：Favicon
-点击：打开最新文章
+> 不依赖 FCM，完全使用本地调度通知，无需网络和后端配合。
 
 ---
 
@@ -536,17 +545,20 @@ RefreshControl，指示器颜色 primary #5D7052，刷新完成 Toast 3 秒。
 ```typescript
 // services/backgroundFetch.ts
 TaskManager.defineTask("rss-background-fetch", async () => {
-  const token     = await SecureStore.getItemAsync("auth_token");
-  const serverUrl = await SecureStore.getItemAsync("server_url");
-  if (!token || !serverUrl) return BackgroundFetch.BackgroundFetchResult.NoData;
-
   const settings = await loadLocalSettings();
+
   if (settings.wifiOnlyFetch) {
     const net = await NetInfo.fetch();
     if (net.type !== "wifi") return BackgroundFetch.BackgroundFetchResult.NoData;
   }
 
-  const newCount = await SyncService.sync(serverUrl, token);
+  const feeds = await db.select().from(feedsTable).where(eq(feedsTable.paused, false));
+  const newCount = await rssService.refreshAll(feeds);
+
+  if (newCount > 0 && settings.pushEnabled) {
+    await scheduleNewArticlesNotification(newCount);
+  }
+
   return newCount > 0
     ? BackgroundFetch.BackgroundFetchResult.NewData
     : BackgroundFetch.BackgroundFetchResult.NoData;
@@ -569,18 +581,23 @@ export async function registerBackgroundFetch(intervalSeconds: number) {
 
 ### 11.1 文章内容缓存
 
-content 字段同步时写入本地 SQLite，离线时直接读取展示全文。content 为空时展示摘要 + 「打开原文」。
+RSS 抓取时 content 字段写入本地 SQLite，完全离线可读。content 为空时展示摘要 + 「打开原文」按钮。
 
 ### 11.2 图片缓存（V1.3）
 
 expo-image 磁盘缓存（cachePolicy: disk）。
 仅 Wi-Fi：移动数据时图片替换为灰色占位（NetInfo 检测）。
-清理：Image.clearDiskCache()。
+清理：`Image.clearDiskCache()`，设置页显示缓存占用大小。
 
 ### 11.3 离线状态 UI
 
 - 无网络：顶部橙色 OfflineBanner「离线模式，显示本地数据」
-- 操作乐观更新，网络恢复后自动同步 pending_actions
+- 所有已抓取文章仍可正常阅读
+- 离线时的已读/收藏/稍后阅读操作直接写本地 SQLite，无需同步
+
+### 11.4 文章保留策略
+
+设置页可配置文章保留天数（7 / 30 / 90 / 永久）。超期未收藏、未稍后阅读的文章自动清理，释放磁盘空间。
 
 ---
 
@@ -636,25 +653,18 @@ expo-image 磁盘缓存（cachePolicy: disk）。
 ### 13.1 Store 设计
 
 ```typescript
-interface AuthStore {
-  token: string | null;
-  username: string | null;
-  serverUrl: string | null;
-  status: "checking" | "authenticated" | "unauthenticated";
-  checkAuth: () => Promise<void>;
-  login: (serverUrl: string, username: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-}
-
 interface FeedsStore {
   feeds: Feed[];
   groups: Group[];
   isLoading: boolean;
+  isRefreshing: boolean;
   fetchFeeds: () => Promise<void>;
   addFeed: (url: string, groupId?: string) => Promise<Feed>;
   deleteFeed: (id: string) => Promise<void>;
   refreshFeed: (id: string) => Promise<{ newCount: number }>;
-  refreshAll: () => Promise<void>;
+  refreshAll: () => Promise<{ newCount: number }>;
+  importOpml: (opmlContent: string) => Promise<{ added: number; failed: number }>;
+  exportOpml: () => Promise<string>;
 }
 ```
 
@@ -695,58 +705,87 @@ interface SettingsStore {
 }
 ```
 
-### 13.2 乐观更新策略
+> 移除了 `AuthStore`（无账户体系），`FeedsStore` 新增 `importOpml` / `exportOpml`。
 
-操作触发 -> Store 立即更新 + 写本地 SQLite -> 发 API -> 成功无操作；失败回滚 Store + 本地 + Toast。
+### 13.2 本地操作策略
+
+所有操作（已读/收藏/稍后阅读）直接写本地 SQLite 并更新 Zustand Store，立即生效，无需网络，无需回滚逻辑。
 
 ---
 
-## 14. API 对接层
+## 14. RSS 服务层
 
-### 14.1 axios 实例
+### 14.1 RSSService 核心实现
 
 ```typescript
-export async function initApiClient() {
-  const serverUrl = await SecureStore.getItemAsync("server_url") ?? "";
-  const token     = await SecureStore.getItemAsync("auth_token");
-  const client = axios.create({ baseURL: serverUrl, timeout: 10000 });
-  client.interceptors.request.use(config => {
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  });
-  client.interceptors.response.use(
-    res => res,
-    async err => {
-      if (err.response?.status === 401) {
-        await SecureStore.deleteItemAsync("auth_token");
-        useAuthStore.getState().logout();
-      }
-      return Promise.reject(err);
+// services/rssService.ts
+export class RSSService {
+  async fetchFeed(feed: Feed): Promise<{ newCount: number }> {
+    const headers: Record<string, string> = {
+      "User-Agent": "RSSReaderApp/1.0",
+    };
+    if (feed.lastEtag) headers["If-None-Match"] = feed.lastEtag;
+    if (feed.lastModified) headers["If-Modified-Since"] = feed.lastModified;
+
+    const res = await fetch(feed.url, { headers });
+
+    if (res.status === 304) {
+      await db.update(feedsTable).set({ lastFetchedAt: new Date() }).where(eq(feedsTable.id, feed.id));
+      return { newCount: 0 };
     }
-  );
-  return client;
+
+    const xml = await res.text();
+    const parsed = parseFeed(xml);           // 自动识别 RSS / Atom / JSON Feed
+    const items = parsed.items;
+
+    let newCount = 0;
+    for (const item of items) {
+      const exists = await db.select().from(articlesTable)
+        .where(eq(articlesTable.guid, item.guid)).limit(1);
+      if (exists.length === 0) {
+        const scored = await aiScorer.score(item);
+        await db.insert(articlesTable).values({ ...item, ...scored, feedId: feed.id });
+        newCount++;
+      }
+    }
+
+    await db.update(feedsTable).set({
+      lastFetchedAt: new Date(),
+      lastEtag: res.headers.get("etag") ?? feed.lastEtag,
+      lastModified: res.headers.get("last-modified") ?? feed.lastModified,
+      errorCount: 0,
+      lastError: null,
+    }).where(eq(feedsTable.id, feed.id));
+
+    return { newCount };
+  }
 }
 ```
 
-### 14.2 接口清单
+### 14.2 本地 AI 评分（aiScorer.ts）
 
-**直接复用（无需修改）**：
+基于规则引擎进行轻量评分，无需外部 API：
 
-GET /api/health / GET /api/auth/me / POST /api/auth/logout / PUT /api/auth/password
-GET /api/feeds / POST /api/feeds / PUT /api/feeds/:id / DELETE /api/feeds/:id
-POST /api/feeds/:id/refresh / POST /api/feeds/refresh-all
-GET /api/feeds/groups / POST /api/feeds/groups / PUT /api/feeds/groups/:id / DELETE /api/feeds/groups/:id
-GET /api/articles / GET /api/articles/:id
-PUT /api/articles/:id/read / PUT /api/articles/:id/star / PUT /api/articles/:id/read-later
-POST /api/articles/mark-all-read / GET /api/search / GET /api/settings / PUT /api/settings
+```typescript
+// services/aiScorer.ts
+export async function score(item: ParsedItem): Promise<{ aiScore: number; aiTags: string[] }> {
+  const tags: string[] = [];
+  let score = 5;  // 基础分
 
-**需后端适配（V1.2 必须）**：
-- POST /api/auth/login：响应体增加 `token: string` 字段
+  // 关键词规则
+  const text = `${item.title} ${item.summary}`.toLowerCase();
+  if (/tutorial|guide|how.?to/.test(text))     { tags.push("教程");  score += 1; }
+  if (/opinion|rant|thoughts/.test(text))       { tags.push("观点");             }
+  if (/research|paper|study/.test(text))        { tags.push("研究");  score += 2; }
+  if (/breaking|urgent|alert/.test(text))       { tags.push("速报");             }
 
-**需后端新增（V1.3）**：
-- POST /api/devices/register
-- DELETE /api/devices/:token
-- PUT /api/devices/:token/prefs
+  // 内容长度加分
+  if ((item.content?.length ?? 0) > 2000)       score += 1;
+  if ((item.content?.length ?? 0) > 5000)       score += 1;
+
+  return { aiScore: Math.min(10, score), aiTags: JSON.stringify(tags) };
+}
+```
 
 ---
 
@@ -756,24 +795,24 @@ POST /api/articles/mark-all-read / GET /api/search / GET /api/settings / PUT /ap
 
 | 错误 | 处理 |
 |------|------|
-| 无网络 | OfflineBanner，读本地 |
-| 超时 | 重试 1 次，Toast |
-| 401 | 清 Token，跳登录，Toast |
-| 404 | Toast，刷新列表 |
-| 5xx | Toast，保持 UI |
-| DB 错误 | 日志 + Toast |
-| 推送权限拒绝 | 引导系统设置 |
+| 无网络 | OfflineBanner，读本地缓存，操作正常可用 |
+| RSS 抓取超时 | 重试 1 次，失败跳过该源，Toast 提示 |
+| Feed 解析失败 | 记录 lastError，跳过，Toast |
+| DB 写入错误 | 日志 + Toast，不影响其他源 |
+| OPML 格式错误 | 内联错误提示，逐条解析跳过无效项 |
+| 推送权限拒绝 | 引导至系统设置 |
 
 ### 15.2 边界情况
 
 | 情况 | 处理 |
 |------|------|
-| 无服务器配置 | 强制 server-setup |
-| Token 过期 | 自动登出 + Toast |
+| 无订阅源 | 强制 onboarding 引导页 |
+| 订阅源异常（errorCount ≥ 5） | 自动暂停 + 红点标记 + 提示修复 |
 | content 为空 | 摘要 + 打开原文按钮 |
 | Favicon 失败 | 首字母彩色圆形占位 |
 | 标题超长 | 2 行省略 |
-| 列表为空 | EmptyState 组件 |
+| 列表为空 | EmptyState 组件（含添加引导） |
+| 磁盘空间不足 | 提示清理缓存或减少保留天数 |
 
 ---
 
@@ -788,6 +827,7 @@ POST /api/articles/mark-all-read / GET /api/search / GET /api/settings / PUT /ap
 | 滑动帧率 | 60fps |
 | 内存 | < 150MB |
 | APK 大小 | < 50MB |
+| RSS 单源抓取耗时 | < 3s |
 
 ### 16.2 FlatList 优化
 
@@ -808,7 +848,9 @@ POST /api/articles/mark-all-read / GET /api/search / GET /api/settings / PUT /ap
 - Hermes JS 引擎（Expo 默认）
 - Drizzle 复合索引覆盖常用查询
 - FTS5 虚拟表支持全文搜索
+- RSS 并发抓取上限 3，防止网络阻塞
 - 字体子集化，react-native-render-html 按需引入插件
+- 文章内容按需懒加载（列表只存 summary，阅读时读 content）
 
 ---
 
@@ -834,12 +876,13 @@ POST /api/articles/mark-all-read / GET /api/search / GET /api/settings / PUT /ap
     "package": "com.rssreader.app",
     "versionCode": 1,
     "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#5D7052" },
-    "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "POST_NOTIFICATIONS"],
-    "googleServicesFile": "./google-services.json"
+    "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "POST_NOTIFICATIONS", "INTERNET", "ACCESS_NETWORK_STATE"]
   },
-  "plugins": ["expo-router", "expo-font", "expo-secure-store", "expo-notifications", "expo-background-fetch"]
+  "plugins": ["expo-router", "expo-font", "expo-notifications", "expo-background-fetch"]
 }
 ```
+
+> 移除了 `expo-secure-store`（无 Token 需存储）和 `googleServicesFile`（无 FCM）。
 
 ### 17.3 发布流程
 
@@ -859,26 +902,23 @@ POST /api/articles/mark-all-read / GET /api/search / GET /api/settings / PUT /ap
 
 **第 1 周**
 - [ ] mobile/ 目录初始化（Expo、expo-router、TypeScript、ESLint）
-- [ ] 本地 SQLite 初始化（Drizzle Schema + Migration）
-- [ ] axios API 客户端（Bearer Token + 401 登出）
-- [ ] expo-secure-store 封装
-- [ ] server-setup 页
-- [ ] login 页
-- [ ] 根布局鉴权守卫
-- [ ] Zustand Store（auth / feeds / articles / settings）
-- [ ] SyncService 增量同步
-- [ ] 时间线页（FlatList + 刷新 + 加载更多 + 筛选 Tab）
+- [ ] 本地 SQLite 初始化（Drizzle Schema + Migration + FTS5）
+- [ ] RSSService：HTTP 抓取 + RSS/Atom/JSON Feed 解析 + ETag 缓存
+- [ ] feedDetector：从网页 URL 自动探测 Feed 地址
+- [ ] aiScorer：本地规则引擎评分
+- [ ] Zustand Store（feeds / articles / settings）
+- [ ] onboarding 引导页（添加第一个订阅源 / 导入 OPML）
+- [ ] 时间线页（FlatList + 刷新触发抓取 + 加载更多 + 筛选 Tab）
 - [ ] ArticleCard（AI 分数 + 标签）
 
 **第 2 周**
-- [ ] 文章阅读页（HTML 渲染 + 图片预览 + 阅读设置 Sheet）
-- [ ] 文章操作（自动已读 / 收藏 / 稍后阅读）
-- [ ] 订阅源管理页（分组 + 添加/删除/刷新/分组管理）
+- [ ] 文章阅读页（HTML 渲染 + 图片预览 + 阅读设置 Sheet + 自动标记已读）
+- [ ] 文章操作（收藏 / 稍后阅读，全本地操作）
+- [ ] 订阅源管理页（分组 + 添加/删除/刷新 + 异常状态展示）
 - [ ] 单订阅源文章列表（/feed/[id]）
 - [ ] 收藏页
-- [ ] 搜索页（防抖 + 历史词）
-- [ ] 设置页（含修改密码二级页）
-- [ ] 离线 pending_actions 队列 + 网络恢复同步
+- [ ] 搜索页（FTS5 + 防抖 + 历史词）
+- [ ] 设置页（含 OPML 导入/导出 + 文章保留策略）
 - [ ] 深色模式适配
 - [ ] OfflineBanner + EmptyState 组件
 
@@ -889,26 +929,16 @@ POST /api/articles/mark-all-read / GET /api/search / GET /api/settings / PUT /ap
 - [ ] 左滑已读 / 右滑收藏 + Haptics
 - [ ] expo-image 磁盘缓存
 - [ ] 仅 Wi-Fi 图片加载
-- [ ] Background Fetch 任务
-- [ ] 后台刷新后本地通知
+- [ ] Background Fetch 任务（定时抓取所有订阅源）
+- [ ] 后台刷新后本地推送通知
 
 **第 4 周**
-- [ ] FCM 集成
-- [ ] 推送 Token 注册（配合后端）
-- [ ] 深链接：通知跳文章
-- [ ] 按订阅源推送开关
+- [ ] 按订阅源配置推送开关
+- [ ] 通知点击深链接跳转
+- [ ] 文章内容懒加载优化（列表 summary / 阅读页按需加载 content）
+- [ ] 磁盘使用量展示 + 一键清理
 - [ ] 应用图标 + Splash 设计
 - [ ] EAS Build 生产测试
 - [ ] Google Play 内测发布
 
 ---
-
-## 附录：后端适配清单
-
-| # | 内容 | 里程碑 | 备注 |
-|---|------|--------|------|
-| 1 | `POST /api/auth/login` 响应体增加 `token: string` | V1.2 必须 | 移动端无法使用 httpOnly Cookie |
-| 2 | 新增 `POST /api/devices/register` | V1.3 | 存储 FCM Token |
-| 3 | 新增 `DELETE /api/devices/:token` | V1.3 | 退出登录注销 Token |
-| 4 | 新增 `PUT /api/devices/:token/prefs` | V1.3 | per-feed 通知偏好 |
-| 5 | 文章拉取后触发 FCM 推送逻辑 | V1.3 | 调用 FCM HTTP v1 API |

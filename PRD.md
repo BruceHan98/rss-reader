@@ -76,18 +76,20 @@ RSS 阅读器，RSS 资讯获取、展示、阅读一站式应用。支持多平
 - 标签以逗号分隔字符串存储在文章记录中，支持后端索引检索
 - 已打标签的文章在卡片上展示标签气泡；未打标签时不展示
 
-### 11. 移动端（iOS & Android 原生应用）
-- 基于 React Native（Expo）开发，共享 Web 端核心业务逻辑
-- 支持 iOS 14+ 和 Android 8.0+
+### 11. 移动端（Android 原生应用）
+- 基于 React Native（Expo）开发，**完全独立运行，不依赖后端服务**
+- 支持 Android 8.0+（API 26+）
+- App 直接抓取 RSS/Atom/JSON Feed，本地完成解析、去重、存储
 - 原生手势操作（左滑标记已读、右滑收藏、下拉刷新）
 - 底部 Tab 导航：时间线 / 订阅源 / 收藏 / 设置
 - 系统级深色模式跟随
-- 推送通知：订阅源有新文章时推送（可按订阅源配置开关）
-- 后台静默刷新（Background Fetch）
-- 本地 SQLite 存储（expo-sqlite），支持离线阅读
-- 应用内浏览器打开原文（WebView），支持分享到系统分享菜单
+- 本地推送通知（无需 FCM，后台抓取到新文章时本地调度）
+- 后台静默刷新（Background Fetch，定时抓取所有订阅源）
+- 本地 SQLite 存储（expo-sqlite + Drizzle ORM），支持完全离线阅读
+- 应用内浏览器打开原文（expo-web-browser），支持分享到系统分享菜单
 - 图片离线缓存，流量优化模式（仅 Wi-Fi 下加载图片）
-- 通过 App Store 和 Google Play 分发
+- OPML 导入/导出，支持与 Web 端订阅源互通
+- 通过 Google Play 分发（EAS Build）
 
 ---
 
@@ -119,7 +121,7 @@ RSS 阅读器，RSS 资讯获取、展示、阅读一站式应用。支持多平
 | 本地数据库 | expo-sqlite + Drizzle ORM |
 | 网络请求 | axios |
 | 导航 | Expo Router（文件路由） |
-| 推送通知 | Expo Notifications + FCM（Android）/ APNs（iOS） |
+| 推送通知 | Expo Notifications（本地通知，无需 FCM/APNs） |
 | 后台刷新 | expo-background-fetch |
 | 应用内浏览器 | expo-web-browser / react-native-webview |
 | 打包发布 | EAS Build（Expo Application Services） |
@@ -169,10 +171,12 @@ RSS 阅读器，RSS 资讯获取、展示、阅读一站式应用。支持多平
 
 ### 移动端
 
-- **路由结构（Expo Router）**：`/(tabs)/index` 时间线 | `/(tabs)/feeds` 订阅源 | `/(tabs)/starred` 收藏 | `/(tabs)/settings` 设置 | `/article/[id]` 文章阅读
-- **本地优先**：文章数据优先读取本地 SQLite，后台同步服务端增量数据
-- **共享逻辑**：订阅源管理、文章状态变更等核心 Service 逻辑与 Web 端共享（抽取为独立 `core` 包）
-- **离线策略**：已下载文章内容可完全离线阅读；订阅源变更在恢复网络后自动同步
+- **路由结构（Expo Router）**：`/onboarding` 首次引导 | `/(tabs)/index` 时间线 | `/(tabs)/feeds` 订阅源 | `/(tabs)/starred` 收藏 | `/(tabs)/settings` 设置 | `/article/[id]` 文章阅读
+- **完全本地化**：App 直接通过 HTTP 请求订阅源 URL，本地完成 RSS 解析、AI 评分、全文存储，无需后端
+- **RSS 引擎**：支持 RSS 2.0 / Atom 1.0 / JSON Feed，ETag/Last-Modified 条件请求节省流量，并发上限 3
+- **本地 AI 评分**：基于关键词规则引擎本地打分/打标，无需调用外部 API
+- **无账户体系**：无需登录，数据完全存储在设备本地；OPML 导入/导出作为数据备份方案
+- **离线策略**：所有已抓取文章可完全离线阅读；已读/收藏/稍后阅读操作直接写本地 SQLite，无需网络
 
 ---
 
@@ -373,5 +377,5 @@ POST /api/ai/analyze（type, feed_id?）
 | MVP | Web 端：订阅管理 + 文章拉取 + 时间线阅读 + 已读状态 | 2周 |
 | V1.0 | Web 端：收藏 + 搜索 + OPML 导入导出 + 自动清理 + 阅读视图优化 | 1周 |
 | V1.1 | Web 端：AI 内容质量打分 + AI 自动打标签 + 标签筛选 + 分数过滤 + AI 设置配置 | 1周 |
-| V1.2 | 移动端（React Native）：时间线 + 订阅管理 + 本地存储 + 离线阅读 | 2周 |
-| V1.3 | 移动端：推送通知 + 后台刷新 + 手势操作 + App Store / Google Play 上架 | 2周 |
+| V1.2 | 移动端（React Native）：本地 RSS 抓取解析 + 时间线 + 订阅管理 + 本地存储 + 离线阅读 | 2周 |
+| V1.3 | 移动端：推送通知（本地）+ 后台刷新 + 手势操作 + Google Play 上架 | 2周 |

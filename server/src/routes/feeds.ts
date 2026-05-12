@@ -50,9 +50,11 @@ export async function feedRoutes(app: FastifyInstance) {
     });
 
     const feed = await db.select().from(feeds).where(eq(feeds.id, id)).then((r) => r[0]);
-    // 立即抓取一次
-    fetchFeed(feed).catch(() => {});
-    return reply.status(201).send(feed);
+    // 立即抓取一次，等待完成以便获取 feed 标题
+    await fetchFeed(feed).catch(() => {});
+    // 重新查询，返回包含从 RSS 自动获取的标题
+    const updatedFeed = await db.select().from(feeds).where(eq(feeds.id, id)).then((r) => r[0]);
+    return reply.status(201).send(updatedFeed);
   });
 
   // PUT /api/feeds/:id

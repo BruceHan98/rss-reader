@@ -60,6 +60,17 @@ export async function fetchFeed(feed: Feed): Promise<{ count: number; error?: st
     const parsed = await parser.parseURL(feed.url);
     let count = 0;
 
+    // 如果标题仍是 URL（添加时未能获取），则用 feed 自身的标题更新
+    const feedTitle = parsed.title?.trim();
+    if (feedTitle && feed.title === feed.url) {
+      const siteUrl = parsed.link || '';
+      const favicon = siteUrl ? `${new URL(siteUrl).origin}/favicon.ico` : '';
+      await db
+        .update(feeds)
+        .set({ title: feedTitle, siteUrl: siteUrl || null, favicon: favicon || null })
+        .where(eq(feeds.id, feed.id));
+    }
+
     for (const item of parsed.items || []) {
       const guid = item.guid || item.link || item.title || '';
       if (!guid) continue;

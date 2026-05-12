@@ -1,14 +1,52 @@
 import { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useStore } from '../store';
-import { X, Rss, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
+import { X, Rss, Loader2, Plus } from 'lucide-react';
 
 export default function AddFeedModal({ onClose }: { onClose: () => void }) {
-  const { addFeed, groups } = useStore();
+  const { addFeed, groups, loadGroups } = useStore();
   const [url, setUrl] = useState('');
   const [groupId, setGroupId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // 新建分组
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [groupCreating, setGroupCreating] = useState(false);
+
+  async function handleGroupSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    if (val === '__new__') {
+      setIsCreatingGroup(true);
+      setNewGroupName('');
+    } else {
+      setGroupId(val);
+    }
+  }
+
+  async function handleCreateGroup() {
+    const name = newGroupName.trim();
+    if (!name) return;
+    setGroupCreating(true);
+    try {
+      const created = await api.createGroup(name);
+      await loadGroups(); // 更新 store 中的分组列表
+      setGroupId(created.id);
+      setIsCreatingGroup(false);
+      setNewGroupName('');
+    } catch {
+      // 静默失败，保留输入框
+    } finally {
+      setGroupCreating(false);
+    }
+  }
+
+  function handleCancelCreateGroup() {
+    setIsCreatingGroup(false);
+    setNewGroupName('');
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,23 +98,55 @@ export default function AddFeedModal({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          {groups.length > 0 && (
-            <div>
-              <label className="block text-xs font-semibold text-[#78786C] uppercase tracking-wider mb-2">
-                分组（可选）
-              </label>
+          <div>
+            <label className="block text-xs font-semibold text-[#78786C] uppercase tracking-wider mb-2">
+              分组（可选）
+            </label>
+            {isCreatingGroup ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); handleCreateGroup(); }
+                    if (e.key === 'Escape') handleCancelCreateGroup();
+                  }}
+                  placeholder="输入分组名称"
+                  className="input-field flex-1"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateGroup}
+                  disabled={groupCreating || !newGroupName.trim()}
+                  className="btn-primary px-3 flex items-center gap-1 shrink-0"
+                >
+                  {groupCreating ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  创建
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelCreateGroup}
+                  className="btn-secondary px-3 shrink-0"
+                >
+                  取消
+                </button>
+              </div>
+            ) : (
               <select
                 value={groupId}
-                onChange={(e) => setGroupId(e.target.value)}
+                onChange={handleGroupSelectChange}
                 className="select-field w-full"
               >
                 <option value="">不分组</option>
                 {groups.map((g) => (
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
+                <option value="__new__">＋ 新建分组…</option>
               </select>
-            </div>
-          )}
+            )}
+          </div>
 
           {error && (
             <div className="px-4 py-3 rounded-2xl bg-[#A85448]/10 border border-[#A85448]/20 text-sm text-[#A85448]">
@@ -94,7 +164,7 @@ export default function AddFeedModal({ onClose }: { onClose: () => void }) {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isCreatingGroup}
               className="btn-primary flex-1 flex items-center justify-center gap-2"
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
