@@ -256,22 +256,37 @@ export default function ArticleReader({ articleId, onBack }: Props) {
     document.querySelectorAll('.article-body img').forEach((el) => {
       const img = el as HTMLImageElement;
       img.loading = 'lazy';
-      // 先注册 onerror，再修改 src，防止快速失败时丢失回调
-      img.onerror = () => {
-        const placeholder = document.createElement('div');
-        placeholder.className = 'article-img-error';
-        placeholder.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>图片加载失败</span>`;
-        img.replaceWith(placeholder);
-      };
+
       // 通过服务端代理加载图片，绕过防盗链
       // 传入文章原始 URL 作为 Referer，这是图片最自然的来源页面
       const src = img.getAttribute('src');
-      if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
-        const proxyUrl = article.url
-          ? `/api/img-proxy?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(article.url)}`
-          : `/api/img-proxy?url=${encodeURIComponent(src)}`;
-        img.src = proxyUrl;
-      }
+      if (!src || (!src.startsWith('http://') && !src.startsWith('https://'))) return;
+
+      const proxyUrl = article.url
+        ? `/api/img-proxy?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(article.url)}`
+        : `/api/img-proxy?url=${encodeURIComponent(src)}`;
+
+      // 先注册 onerror 再赋值 src，防止快速失败时丢失回调
+      // 网络抖动时自动重试最多 2 次（800ms、1600ms），全失败才显示占位
+      let retries = 0;
+      const MAX_RETRIES = 2;
+      img.onerror = () => {
+        if (retries < MAX_RETRIES) {
+          retries++;
+          const delay = 800 * retries;
+          setTimeout(() => {
+            // 加时间戳 bust 缓存，避免浏览器直接返回缓存的失败结果
+            img.src = `${proxyUrl}&_r=${retries}`;
+          }, delay);
+        } else {
+          img.onerror = null;
+          const placeholder = document.createElement('div');
+          placeholder.className = 'article-img-error';
+          placeholder.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>图片加载失败</span>`;
+          img.replaceWith(placeholder);
+        }
+      };
+      img.src = proxyUrl;
     });
   }, [article]);
 
