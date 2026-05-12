@@ -138,7 +138,7 @@ type WidthKey = typeof WIDTH_PRESETS[number]['key'];
 // Font size presets: rem value and label
 const FONT_PRESETS = [
   { key: 'sm', label: '小', size: '0.9375rem' },
-  { key: 'md', label: '中', size: '1rem' },
+  { key: 'md', label: '中', size: '1.0625rem' },
   { key: 'lg', label: '大', size: '1.125rem' },
 ] as const;
 type FontKey = typeof FONT_PRESETS[number]['key'];
@@ -193,25 +193,44 @@ export default function ArticleReader({ articleId, onBack }: Props) {
     }
   }, []);
 
-  function fetchArticle() {
+  async function fetchArticle() {
     fetchCancelRef.current = false;
     setLoading(true);
     setLoadError(null);
     setArticle(null);
-    api.getArticle(articleId).then((a) => {
+
+    // 自动重试：最多尝试 3 次（首次 + 2 次重试），每次间隔翻倍
+    const MAX_ATTEMPTS = 3;
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (fetchCancelRef.current) return;
-      setArticle(a);
-      setLoading(false);
-      if (!a.isRead) {
-        api.markRead(articleId).then(() => loadFeeds()).catch(() => {});
+      // 404 类错误无需重试
+      if (lastErr) {
+        const is404 = lastErr.message === '文章不存在' || lastErr.message?.includes('404');
+        if (is404) break;
+        // 等待后重试：500ms、1000ms
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+        if (fetchCancelRef.current) return;
       }
-    }).catch((err) => {
-      if (fetchCancelRef.current) return;
-      console.error("加载文章失败:", err);
-      const is404 = err.message === '文章不存在' || err.message?.includes('404');
-      setLoadError(is404 ? 'not-found' : 'network');
-      setLoading(false);
-    });
+      try {
+        const a = await api.getArticle(articleId);
+        if (fetchCancelRef.current) return;
+        setArticle(a);
+        setLoading(false);
+        if (!a.isRead) {
+          api.markRead(articleId).then(() => loadFeeds()).catch(() => {});
+        }
+        return;
+      } catch (err) {
+        lastErr = err as Error;
+        console.error(`加载文章失败 (attempt ${attempt + 1}):`, err);
+      }
+    }
+
+    if (fetchCancelRef.current) return;
+    const is404 = lastErr?.message === '文章不存在' || lastErr?.message?.includes('404');
+    setLoadError(is404 ? 'not-found' : 'network');
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -237,17 +256,18 @@ export default function ArticleReader({ articleId, onBack }: Props) {
     document.querySelectorAll('.article-body img').forEach((el) => {
       const img = el as HTMLImageElement;
       img.loading = 'lazy';
-      // 通过服务端代理加载图片，绕过防盗链（Hotlink Protection）
-      const src = img.getAttribute('src');
-      if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
-        img.src = `/api/img-proxy?url=${encodeURIComponent(src)}`;
-      }
+      // 先注册 onerror，再修改 src，防止快速失败时丢失回调
       img.onerror = () => {
         const placeholder = document.createElement('div');
         placeholder.className = 'article-img-error';
         placeholder.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>图片加载失败</span>`;
         img.replaceWith(placeholder);
       };
+      // 通过服务端代理加载图片，绕过防盗链（Hotlink Protection）
+      const src = img.getAttribute('src');
+      if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+        img.src = `/api/img-proxy?url=${encodeURIComponent(src)}`;
+      }
     });
   }, [article]);
 

@@ -90,9 +90,10 @@ app.get<{ Querystring: { url: string } }>('/api/img-proxy', async (req, reply) =
   if (!url) return reply.status(400).send({ error: 'missing url' });
 
   let decoded: string;
+  let parsedUrl: URL;
   try {
     decoded = decodeURIComponent(url);
-    new URL(decoded); // 校验格式
+    parsedUrl = new URL(decoded); // 校验格式
   } catch {
     return reply.status(400).send({ error: 'invalid url' });
   }
@@ -103,22 +104,39 @@ app.get<{ Querystring: { url: string } }>('/api/img-proxy', async (req, reply) =
 
   try {
     const res = await fetch(decoded, {
+      redirect: 'follow',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        // 故意不传 Referer，绕过防盗链
+        // 传递同域 Referer，部分防盗链需要 Referer 为图片所在域名
+        'Referer': `${parsedUrl.protocol}//${parsedUrl.host}/`,
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return reply.status(res.status).send();
 
     const contentType = res.headers.get('content-type') || 'image/jpeg';
-    // 只转发图片类型
-    if (!contentType.startsWith('image/')) return reply.status(403).send({ error: 'not an image' });
+    // 放宽 content-type 检查：部分服务器返回 application/octet-stream 或其他非标准类型
+    // 通过文件扩展名或响应头双重判断
+    const ext = parsedUrl.pathname.split('.').pop()?.toLowerCase() ?? '';
+    const imageExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp', 'tiff']);
+    const isImage = contentType.startsWith('image/') ||
+      contentType === 'application/octet-stream' && imageExts.has(ext);
+    if (!isImage) return reply.status(403).send({ error: 'not an image' });
+
+    // 标准化 content-type：octet-stream 时根据扩展名推断
+    const mimeMap: Record<string, string> = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      gif: 'image/gif', webp: 'image/webp', avif: 'image/avif',
+      svg: 'image/svg+xml', ico: 'image/x-icon', bmp: 'image/bmp',
+    };
+    const finalContentType = contentType.startsWith('image/')
+      ? contentType
+      : (mimeMap[ext] ?? 'image/jpeg');
 
     const buf = await res.arrayBuffer();
     reply
-      .header('Content-Type', contentType)
+      .header('Content-Type', finalContentType)
       .header('Cache-Control', 'public, max-age=86400')
       .send(Buffer.from(buf));
   } catch {
