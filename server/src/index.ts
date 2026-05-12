@@ -1,4 +1,7 @@
 import Fastify from 'fastify';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import fastifyJwt from '@fastify/jwt';
@@ -16,12 +19,23 @@ import { startScheduler } from './services/scheduler.js';
 
 const app = Fastify({ logger: true });
 
-// JWT_SECRET 必须由环境变量提供，不允许使用默认值
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.error('[FATAL] JWT_SECRET environment variable is not set. Please set it before starting the server.');
-  process.exit(1);
+
+// JWT_SECRET：优先使用环境变量，否则从持久化文件读取或自动生成
+function resolveJwtSecret(): string {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+  const secretFile = path.join(dataDir, '.jwt_secret');
+  if (fs.existsSync(secretFile)) {
+    return fs.readFileSync(secretFile, 'utf-8').trim();
+  }
+  const generated = crypto.randomBytes(32).toString('hex');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(secretFile, generated, { mode: 0o600 });
+  console.log('[INFO] JWT_SECRET auto-generated and saved to', secretFile);
+  return generated;
 }
+
+const JWT_SECRET = resolveJwtSecret();
 
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGIN || 'http://localhost:8080').split(',').map((s: string) => s.trim()));
 await app.register(cors, { origin: (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => { if (!origin || allowedOrigins.has(origin)) return cb(null, true); cb(null, false); }, credentials: true });
