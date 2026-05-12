@@ -29,14 +29,44 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    api.me()
-      .then((user) => {
+    // 带重试的认证检查：区分真正的401（未登录）和瞬时网络错误
+    // 只有明确收到401才视为未登录，其他错误最多重试2次
+    let cancelled = false;
+    async function checkAuth(retries = 2) {
+      try {
+        const user = await api.me();
+        if (cancelled) return;
         setUsername(user.username);
         setAuthState('logged-in');
-      })
-      .catch(() => {
-        setAuthState('logged-out');
-      });
+      } catch (err: any) {
+        if (cancelled) return;
+        // 401 = 确实未登录，直接跳转
+        if (err.message === '未登录' || err.message === '未登录或登录已过期') {
+          setAuthState('logged-out');
+          return;
+        }
+        // 其他错误（网络抖动等），重试
+        if (retries > 0) {
+          await new Promise((r) => setTimeout(r, 800));
+          return checkAuth(retries - 1);
+        }
+        // 重试耗尽仍失败，避免误判为未登录，保持checking状态再等一轮
+        // 再给一次较长延迟的机会
+        await new Promise((r) => setTimeout(r, 2000));
+        if (cancelled) return;
+        try {
+          const user = await api.me();
+          if (cancelled) return;
+          setUsername(user.username);
+          setAuthState('logged-in');
+        } catch (finalErr: any) {
+          if (cancelled) return;
+          setAuthState('logged-out');
+        }
+      }
+    }
+    checkAuth();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {

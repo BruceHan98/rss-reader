@@ -461,7 +461,7 @@ function ArticleItem({
       {/* Title */}
       <h3
         className={cn(
-          'text-[13px] leading-snug mb-1 line-clamp-2',
+          'text-[14px] leading-snug mb-1 line-clamp-2',
           article.isRead
             ? 'text-[#78786C] font-normal'
             : 'text-[#2C2C24] font-semibold'

@@ -188,14 +188,14 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
           {/* 外观 */}
           <Section title="外观">
             <SettingRow label="主题">
-              <select value={settings.theme} onChange={(e) => handleSettingChange('theme', e.target.value)} className="select-field text-xs h-8 px-3">
+              <select value={settings.theme} onChange={(e) => handleSettingChange('theme', e.target.value)} className="select-field text-xs h-8 px-3 w-28">
                 <option value="auto">跟随系统</option>
                 <option value="light">亮色</option>
                 <option value="dark">暗色</option>
               </select>
             </SettingRow>
             <SettingRow label="字体大小">
-              <select value={settings.fontSize} onChange={(e) => handleSettingChange('fontSize', e.target.value)} className="select-field text-xs h-8 px-3">
+              <select value={settings.fontSize} onChange={(e) => handleSettingChange('fontSize', e.target.value)} className="select-field text-xs h-8 px-3 w-28">
                 <option value="14">小 14px</option>
                 <option value="16">默认 16px</option>
                 <option value="18">大 18px</option>
@@ -203,7 +203,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
               </select>
             </SettingRow>
             <SettingRow label="行距">
-              <select value={settings.lineHeight} onChange={(e) => handleSettingChange('lineHeight', e.target.value)} className="select-field text-xs h-8 px-3">
+              <select value={settings.lineHeight} onChange={(e) => handleSettingChange('lineHeight', e.target.value)} className="select-field text-xs h-8 px-3 w-28">
                 <option value="1.4">紧凑 1.4</option>
                 <option value="1.6">默认 1.6</option>
                 <option value="1.8">宽松 1.8</option>
@@ -218,7 +218,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
               <select
                 value={settings.fetchScheduleMode || 'interval'}
                 onChange={(e) => handleSettingChange('fetchScheduleMode', e.target.value)}
-                className="select-field text-xs h-8 px-3"
+                className="select-field text-xs h-8 px-3 w-28"
               >
                 <option value="interval">间隔拉取</option>
                 <option value="times">定时拉取</option>
@@ -227,7 +227,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
 
             {(settings.fetchScheduleMode || 'interval') === 'interval' ? (
               <SettingRow label="抓取间隔">
-                <select value={settings.fetchInterval} onChange={(e) => handleSettingChange('fetchInterval', e.target.value)} className="select-field text-xs h-8 px-3">
+                <select value={settings.fetchInterval} onChange={(e) => handleSettingChange('fetchInterval', e.target.value)} className="select-field text-xs h-8 px-3 w-28">
                   <option value="15">15 分钟</option>
                   <option value="30">30 分钟</option>
                   <option value="60">1 小时</option>
@@ -242,7 +242,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
             )}
 
             <SettingRow label="拉取后 AI 分析">
-              <select value={settings.autoAiAfterFetch || 'off'} onChange={(e) => handleSettingChange('autoAiAfterFetch', e.target.value)} className="select-field text-xs h-8 px-3">
+              <select value={settings.autoAiAfterFetch || 'off'} onChange={(e) => handleSettingChange('autoAiAfterFetch', e.target.value)} className="select-field text-xs h-8 px-3 w-28">
                 <option value="off">不启用</option>
                 <option value="score">仅打分</option>
                 <option value="tags">仅打标签</option>
@@ -250,7 +250,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
               </select>
             </SettingRow>
             <SettingRow label="保留天数">
-              <select value={settings.retentionDays} onChange={(e) => handleSettingChange('retentionDays', e.target.value)} className="select-field text-xs h-8 px-3">
+              <select value={settings.retentionDays} onChange={(e) => handleSettingChange('retentionDays', e.target.value)} className="select-field text-xs h-8 px-3 w-28">
                 <option value="7">7 天</option>
                 <option value="30">30 天</option>
                 <option value="90">90 天</option>

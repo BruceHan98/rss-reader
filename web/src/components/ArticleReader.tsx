@@ -14,6 +14,7 @@ const READER_STYLES = `
     color: #2C2C24;
     font-size: 1rem;
     line-height: 1.8;
+    overflow-x: hidden;
   }
   .article-body h1,
   .article-body h2,
@@ -100,10 +101,15 @@ flex-shrink: 0;
     border-top: 1px solid #DED8CF;
     margin: 2em 0;
   }
+  .article-body .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1.5em 0;
+  }
   .article-body table {
     width: 100%;
+    min-width: 400px;
     border-collapse: collapse;
-    margin: 1.5em 0;
     font-size: 0.9rem;
   }
   .article-body th {
@@ -152,8 +158,10 @@ export default function ArticleReader({ articleId, onBack }: Props) {
   const isScrolling = useRef(false);
   const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrollY = useRef(0);
+  const fetchCancelRef = useRef(false);
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<'not-found' | 'network' | null>(null);
   const [widthKey, setWidthKey] = useState<WidthKey>(() => loadPref('reader-width', 'md'));
   const [fontKey, setFontKey] = useState<FontKey>(() => loadPref('reader-font', 'md'));
   const [showWidthPicker, setShowWidthPicker] = useState(false);
@@ -185,24 +193,32 @@ export default function ArticleReader({ articleId, onBack }: Props) {
     }
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  function fetchArticle() {
+    fetchCancelRef.current = false;
     setLoading(true);
+    setLoadError(null);
     setArticle(null);
     api.getArticle(articleId).then((a) => {
-      if (cancelled) return;
+      if (fetchCancelRef.current) return;
       setArticle(a);
       setLoading(false);
-      // 自动标记已读（无论来源是列表点击还是直接 URL 访问）
       if (!a.isRead) {
         api.markRead(articleId).then(() => loadFeeds()).catch(() => {});
       }
     }).catch((err) => {
-      if (cancelled) return;
+      if (fetchCancelRef.current) return;
       console.error("加载文章失败:", err);
+      const is404 = err.message === '文章不存在' || err.message?.includes('404');
+      setLoadError(is404 ? 'not-found' : 'network');
       setLoading(false);
     });
-    return () => { cancelled = true; };
+  }
+
+  useEffect(() => {
+    fetchCancelRef.current = false;
+    fetchArticle();
+    return () => { fetchCancelRef.current = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId]);
 
   useEffect(() => {
@@ -210,9 +226,22 @@ export default function ArticleReader({ articleId, onBack }: Props) {
     document.querySelectorAll('.article-body pre code').forEach((block) => {
       hljs.highlightElement(block as HTMLElement);
     });
+    // 将表格包裹在可横向滚动的容器内，防止撑破页面宽度
+    document.querySelectorAll('.article-body table').forEach((table) => {
+      if (table.parentElement?.classList.contains('table-wrap')) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      table.parentNode!.insertBefore(wrap, table);
+      wrap.appendChild(table);
+    });
     document.querySelectorAll('.article-body img').forEach((el) => {
       const img = el as HTMLImageElement;
       img.loading = 'lazy';
+      // 通过服务端代理加载图片，绕过防盗链（Hotlink Protection）
+      const src = img.getAttribute('src');
+      if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+        img.src = `/api/img-proxy?url=${encodeURIComponent(src)}`;
+      }
       img.onerror = () => {
         const placeholder = document.createElement('div');
         placeholder.className = 'article-img-error';
@@ -249,8 +278,20 @@ export default function ArticleReader({ articleId, onBack }: Props) {
 
   if (!article) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#FDFCF8] text-[#78786C]">
-        <p>文章不存在</p>
+      <div className="flex flex-col items-center justify-center h-full bg-[#FDFCF8] gap-3 text-[#78786C]">
+        {loadError === 'network' ? (
+          <>
+            <p className="text-sm">加载失败，请检查网络连接</p>
+            <button
+              onClick={fetchArticle}
+              className="px-4 py-2 rounded-full bg-[#5D7052]/10 text-[#5D7052] text-sm font-semibold hover:bg-[#5D7052]/20 active:scale-95 transition-all"
+            >
+              重试
+            </button>
+          </>
+        ) : (
+          <p className="text-sm">文章不存在</p>
+        )}
       </div>
     );
   }
@@ -413,7 +454,7 @@ export default function ArticleReader({ articleId, onBack }: Props) {
       {/* Article */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto overflow-x-hidden"
         onScroll={(e) => {
           if (window.innerWidth >= 768) return;
           const el=e.currentTarget;

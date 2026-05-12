@@ -60,6 +60,7 @@ const PUBLIC_PATHS = new Set([
   '/api/auth/logout',
   '/api/auth/me',
   '/api/health',
+  '/api/img-proxy',
 ]);
 
 app.addHook('onRequest', async (req, reply) => {
@@ -82,6 +83,48 @@ await app.register(settingsRoutes);
 await app.register(aiRoutes);
 
 app.get('/api/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
+
+// ── 图片代理：绕过防盗链，不携带 Referer 转发图片 ──
+app.get<{ Querystring: { url: string } }>('/api/img-proxy', async (req, reply) => {
+  const { url } = req.query;
+  if (!url) return reply.status(400).send({ error: 'missing url' });
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(url);
+    new URL(decoded); // 校验格式
+  } catch {
+    return reply.status(400).send({ error: 'invalid url' });
+  }
+
+  // 只允许 http/https，禁止内网地址
+  const { isPublicUrl } = await import('./services/fetcher.js');
+  if (!isPublicUrl(decoded)) return reply.status(403).send({ error: 'forbidden' });
+
+  try {
+    const res = await fetch(decoded, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        // 故意不传 Referer，绕过防盗链
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return reply.status(res.status).send();
+
+    const contentType = res.headers.get('content-type') || 'image/jpeg';
+    // 只转发图片类型
+    if (!contentType.startsWith('image/')) return reply.status(403).send({ error: 'not an image' });
+
+    const buf = await res.arrayBuffer();
+    reply
+      .header('Content-Type', contentType)
+      .header('Cache-Control', 'public, max-age=86400')
+      .send(Buffer.from(buf));
+  } catch {
+    return reply.status(502).send();
+  }
+});
 
 const port = parseInt(process.env.PORT || '3000');
 await app.listen({ port, host: '0.0.0.0' });
