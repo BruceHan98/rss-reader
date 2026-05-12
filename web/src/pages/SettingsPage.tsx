@@ -210,6 +210,22 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
                 <option value="2.0">很宽松 2.0</option>
               </select>
             </SettingRow>
+            <SettingRow label="滚动自动已读">
+              <button
+                role="switch"
+                aria-checked={settings.markReadOnScroll === 'true'}
+                onClick={() => handleSettingChange('markReadOnScroll', settings.markReadOnScroll === 'true' ? 'false' : 'true')}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                  settings.markReadOnScroll === 'true' ? 'bg-[#5D7052]' : 'bg-[#C8C4BB]'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${
+                    settings.markReadOnScroll === 'true' ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </SettingRow>
           </Section>
 
           {/* 抓取与清理 */}

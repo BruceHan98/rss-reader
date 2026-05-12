@@ -4,6 +4,7 @@ const ALLOWED_SETTINGS_KEYS = new Set([
   'fetchInterval', 'retentionDays', 'theme', 'fontSize', 'lineHeight',
   'aiEnabled', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'aiMinScore',
   'autoAiAfterFetch', 'fetchScheduleMode', 'fetchScheduleTimes',
+  'markReadOnScroll',
 ]);
 
 

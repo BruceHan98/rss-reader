@@ -80,6 +80,7 @@ export interface Settings {
   aiMinScore: string;
   aiTokensUsed: string;
   autoAiAfterFetch: string;
+  markReadOnScroll: string;
 }
 
 const BASE = '/api';
