@@ -7,6 +7,11 @@ import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Men
 
 const PAGE_SIZE = 30;
 
+function articleFaviconUrl(article: Article): string {
+  if (article.feed_favicon) return article.feed_favicon;
+  try { return new URL(article.url!).origin + '/favicon.ico'; } catch { return ''; }
+}
+
 export default function ArticleList() {
   const {
     filter, selectedArticleId, settings,
@@ -29,6 +34,7 @@ export default function ArticleList() {
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -115,6 +121,7 @@ export default function ArticleList() {
 
       const data = await api.getArticles(params, signal);
       setTotal(data.total);
+      setHasMore(data.articles.length === PAGE_SIZE);
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
       setPage(p);
     } catch (err: any) {
@@ -132,6 +139,7 @@ export default function ArticleList() {
   useEffect(() => {
     setArticles([]);
     setTotal(0);
+    setHasMore(false);
     setPage(1);
     loadArticles(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,6 +154,7 @@ export default function ArticleList() {
     }
     setArticles([]);
     setTotal(0);
+    setHasMore(false);
     setPage(1);
     loadArticles(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,9 +219,6 @@ export default function ArticleList() {
                 if (!article || article.isRead) return prev;
                 scrollReadPendingIds.current.add(id);
                 markArticleRead(id, true, article.feedId).catch(() => {});
-                if (filterRef.current.type === 'unread') {
-                  setTotal((t) => Math.max(0, t - 1));
-                }
                 return prev.map((a) => (a.id === id ? { ...a, isRead: true } : a));
               });
               observer.unobserve(entry.target);
@@ -244,7 +250,7 @@ export default function ArticleList() {
     if (!loaderRef.current) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !loading && articles.length < total) {
+        if (entry.isIntersecting && !loading && hasMore) {
           loadArticles(pageRef.current + 1);
         }
       },
@@ -252,7 +258,7 @@ export default function ArticleList() {
     );
     obs.observe(loaderRef.current);
     return () => obs.disconnect();
-  }, [loading, articles.length, total]);
+  }, [loading, hasMore]);
 
   async function handleSelect(article: Article) {
     // Optimistically update local UI only; API call is handled by ArticleReader via onRead
@@ -260,9 +266,6 @@ export default function ArticleList() {
       setArticles((prev) =>
         prev.map((a) => (a.id === article.id ? { ...a, isRead: true } : a))
       );
-      if (filter.type === 'unread') {
-        setTotal((prev) => Math.max(0, prev - 1));
-      }
     }
 
     setSelectedArticle(article.id);
@@ -307,6 +310,7 @@ export default function ArticleList() {
     setArticles((prev) => prev.map((a) => ({ ...a, isRead: true })));
     if (filter.type === 'unread') {
       setTotal(0);
+      setHasMore(false);
     }
   }
 
@@ -546,9 +550,9 @@ function ArticleItem({
 
       {/* Feed source + time */}
       <div className="flex items-center gap-1.5 mb-1.5 pr-4">
-        {article.feed_favicon && (
+        {articleFaviconUrl(article) && (
           <img
-            src={article.feed_favicon}
+            src={articleFaviconUrl(article)}
             alt=""
             className="w-3 h-3 rounded-full flex-shrink-0"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
