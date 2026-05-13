@@ -6,6 +6,16 @@ import { feeds, articles } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Feed } from '../db/schema.js';
 
+/** 读取 admin 用户的保留天数设置，返回截止时间字符串（ISO），0 表示不限制 */
+function getRetentionCutoff(): string | null {
+  const row = sqlite
+    .prepare("SELECT value FROM settings WHERE key = 'retentionDays' AND user_id = (SELECT id FROM users WHERE username = 'admin')")
+    .get() as any;
+  const days = parseInt(row?.value ?? '30');
+  if (!days || days <= 0) return null;
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 const parser = new Parser({
@@ -72,9 +82,17 @@ export async function fetchFeed(feed: Feed): Promise<{ count: number; error?: st
       await db.update(feeds).set(metaUpdates).where(eq(feeds.id, feed.id));
     }
 
+    const cutoff = getRetentionCutoff();
+
     for (const item of parsed.items || []) {
       const guid = item.guid || item.link || item.title || '';
       if (!guid) continue;
+
+      // 跳过超出保留期的旧条目，避免清理后被重新拉取入库
+      if (cutoff) {
+        const pubDate = item.isoDate || item.pubDate;
+        if (pubDate && pubDate < cutoff) continue;
+      }
 
       const existing = sqlite
         .prepare('SELECT id FROM articles WHERE feed_id = ? AND guid = ?')
