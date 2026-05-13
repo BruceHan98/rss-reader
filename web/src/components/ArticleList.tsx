@@ -36,6 +36,8 @@ export default function ArticleList() {
 
   const loaderRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // 用于取消过期请求，避免竞态条件
+  const abortControllerRef = useRef<AbortController | null>(null);
   // 用于滚动自动已读的 observer
   const scrollReadObserverRef = useRef<IntersectionObserver | null>(null);
   // 记录正在观察的文章 id → element，避免重复注册
@@ -89,6 +91,13 @@ export default function ArticleList() {
   const loadArticlesRef = useRef<(p?: number, reset?: boolean) => Promise<void>>();
 
   async function loadArticles(p = 1, reset = false) {
+    // 取消上一个未完成的请求，防止旧响应覆盖新数据（竞态条件）
+    if (reset) {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = new AbortController();
+    }
+    const signal = reset ? abortControllerRef.current!.signal : undefined;
+
     setLoading(true);
     try {
       const params: Record<string, string | number | undefined> = {
@@ -104,13 +113,17 @@ export default function ArticleList() {
       if (minScoreRef.current > 0) params.minScore = minScoreRef.current;
       if (selectedTagsRef.current.length > 0) params.tags = selectedTagsRef.current.join(',');
 
-      const data = await api.getArticles(params);
+      const data = await api.getArticles(params, signal);
       setTotal(data.total);
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
       setPage(p);
-    } finally {
+    } catch (err: any) {
+      // 请求被主动取消时不更新状态（新请求正在进行中）
+      if (err?.name === 'AbortError') return;
       setLoading(false);
+      throw err;
     }
+    setLoading(false);
   }
   // Always keep the ref pointing at the latest loadArticles (captures current filter/minScore/tags)
   loadArticlesRef.current = loadArticles;

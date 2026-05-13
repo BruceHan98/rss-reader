@@ -129,13 +129,13 @@ export const api = {
     request<{ newArticles: number; total: number }>('/feeds/refresh-all', { method: 'POST' }),
 
   // Articles
-  getArticles: (params: Record<string, string | number | undefined>) => {
+  getArticles: (params: Record<string, string | number | undefined>, signal?: AbortSignal) => {
     const q = new URLSearchParams(
       Object.entries(params)
         .filter(([, v]) => v !== undefined)
         .map(([k, v]) => [k, String(v)])
     ).toString();
-    return request<ArticleList>(`/articles?${q}`);
+    return request<ArticleList>(`/articles?${q}`, signal ? { signal } : undefined);
   },
   getArticle: (id: string) => request<Article>(`/articles/${id}`),
   markRead: (id: string, isRead = true) =>
