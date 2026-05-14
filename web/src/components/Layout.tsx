@@ -11,8 +11,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const totalUnread = feeds.reduce((s, f) => s + (f.unreadCount || 0), 0);
-
+  
   function navTo(type: 'all' | 'unread', path: string) {
     setFilter({ type });
     navigate(path);
@@ -84,7 +83,6 @@ export default function Layout({ children }: { children: ReactNode }) {
             <BottomTabItem
               icon={<Inbox size={20} />}
               label="全部"
-              badge={totalUnread > 0 ? totalUnread : undefined}
               active={location.pathname === '/' && filter.type === 'all'}
               onClick={() => navTo('all', '/')}
             />

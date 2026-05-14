@@ -62,6 +62,23 @@ export default function ArticleList() {
   const articlesRef = useRef(articles);
   useEffect(() => { articlesRef.current = articles; }, [articles]);
 
+  // 各 filter key 对应的 displayTotal 缓存，切换 tab 时先显示缓存值
+  const displayTotalCacheRef = useRef<Map<string, number>>(new Map());
+  function getFilterKey(f: typeof filter): string {
+    if (f.type === 'feed') return `feed:${f.feedId}`;
+    if (f.type === 'group') return `group:${f.groupId}`;
+    return f.type;
+  }
+  // 减少 displayTotal 并同步到缓存
+  function decDisplayTotal() {
+    const key = getFilterKey(filterRef.current);
+    setDisplayTotal((prev) => {
+      const next = Math.max(0, prev - 1);
+      displayTotalCacheRef.current.set(key, next);
+      return next;
+    });
+  }
+
   // Load AI tags list once
   useEffect(() => {
     api.getAiTags().then((r) => setAllTags(r.tags)).catch(() => {});
@@ -126,7 +143,10 @@ export default function ArticleList() {
 
       const data = await api.getArticles(params, signal);
       setTotal(data.total);
-      if (reset) setDisplayTotal(data.total);
+      if (reset) {
+        setDisplayTotal(data.total);
+        displayTotalCacheRef.current.set(getFilterKey(filter), data.total);
+      }
       setHasMore(data.articles.length === PAGE_SIZE);
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
       setPage(p);
@@ -141,9 +161,10 @@ export default function ArticleList() {
   // Always keep the ref pointing at the latest loadArticles (captures current filter/minScore/tags)
   loadArticlesRef.current = loadArticles;
 
-  // Reload when filter changes（不提前清空，保留旧内容直到新数据返回，避免白屏闪烁）
+  // Reload when filter changes（不提前清空文章列表，保留旧内容直到新数据返回，避免白屏闪烁；数量先恢复该tab的缓存值）
   useEffect(() => {
     setTotal(0);
+    setDisplayTotal(displayTotalCacheRef.current.get(getFilterKey(filter)) ?? 0);
     setHasMore(false);
     setPage(1);
     scrollContainerRef.current?.scrollTo({ top: 0 });
@@ -159,6 +180,7 @@ export default function ArticleList() {
       return;
     }
     setTotal(0);
+    setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
     loadArticles(1, true);
@@ -230,7 +252,7 @@ export default function ArticleList() {
               setArticles((prev) =>
                 prev.map((a) => (a.id === id ? { ...a, isRead: true } : a))
               );
-              setDisplayTotal((prev) => Math.max(0, prev - 1));
+              decDisplayTotal();
 
               // 发请求：直接调 api，不走 markArticleRead（避免重复更新 store unreadCount）
               api.markRead(id).catch(() => {});
@@ -280,7 +302,7 @@ export default function ArticleList() {
       setArticles((prev) =>
         prev.map((a) => (a.id === article.id ? { ...a, isRead: true } : a))
       );
-      setDisplayTotal((prev) => Math.max(0, prev - 1));
+      decDisplayTotal();
       // 直接发请求，不经过 markArticleRead（避免与 ArticlePage.onRead 重复更新 store unreadCount）
       api.markRead(article.id).catch(() => {});
     }
@@ -326,6 +348,7 @@ export default function ArticleList() {
     await markAllRead(params);
     setArticles((prev) => prev.map((a) => ({ ...a, isRead: true })));
     setDisplayTotal(0);
+    displayTotalCacheRef.current.set(getFilterKey(filter), 0);
     if (filter.type === 'unread') {
       setTotal(0);
       setHasMore(false);
