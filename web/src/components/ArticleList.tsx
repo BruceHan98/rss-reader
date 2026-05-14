@@ -144,7 +144,6 @@ export default function ArticleList() {
   // Reload when filter changes（不提前清空，保留旧内容直到新数据返回，避免白屏闪烁）
   useEffect(() => {
     setTotal(0);
-    setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
     scrollContainerRef.current?.scrollTo({ top: 0 });
@@ -160,7 +159,6 @@ export default function ArticleList() {
       return;
     }
     setTotal(0);
-    setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
     loadArticles(1, true);
