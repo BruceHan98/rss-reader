@@ -45,11 +45,7 @@ export default function ArticleList() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   // 用于取消过期请求，避免竞态条件
   const abortControllerRef = useRef<AbortController | null>(null);
-  // 用于滚动自动已读的 observer
-  const scrollReadObserverRef = useRef<IntersectionObserver | null>(null);
-  // 记录正在观察的文章 id → element，避免重复注册
-  const observedArticleIds = useRef<Set<string>>(new Set());
-  // 记录已发起「标为已读」的文章 id，防止 Observer 多次触发导致重复计数
+  // 记录已发起「标为已读」的文章 id，防止 scroll 多次触发导致重复计数
   const scrollReadPendingIds = useRef<Set<string>>(new Set());
 
   // AI filter refs (to avoid stale closure in loadArticles)
@@ -163,10 +159,12 @@ export default function ArticleList() {
 
   // Reload when filter changes（不提前清空文章列表，保留旧内容直到新数据返回，避免白屏闪烁；数量先恢复该tab的缓存值）
   useEffect(() => {
-    setTotal(0);
-    setDisplayTotal(displayTotalCacheRef.current.get(getFilterKey(filter)) ?? 0);
+    const cached = displayTotalCacheRef.current.get(getFilterKey(filter)) ?? 0;
+    setTotal(cached);
+    setDisplayTotal(cached);
     setHasMore(false);
     setPage(1);
+    scrollReadPendingIds.current.clear(); // 清除旧 tab 的已读记录，防止 id 污染新 tab
     scrollContainerRef.current?.scrollTo({ top: 0 });
     loadArticles(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,85 +196,37 @@ export default function ArticleList() {
     return () => window.removeEventListener('ai-job-done', onAiDone);
   }, []);
 
-  // 滚动自动已读：当文章条目向上滚出滚动容器时标为已读
-  // 用 ref 解决 IntersectionObserver 回调中的 stale closure 问题
+  // 滚动自动已读：监听滚动容器的 scroll 事件，检查哪些文章已滚出顶部
   const markReadOnScrollRef = useRef(markReadOnScroll);
   useEffect(() => { markReadOnScrollRef.current = markReadOnScroll; }, [markReadOnScroll]);
 
-
   useEffect(() => {
     const container = scrollContainerRef.current;
-    const isEmpty = articles.length === 0;
+    if (!container || !markReadOnScroll) return;
 
-    // filter 切换时（articles 变为空）销毁旧 observer，等下次有文章时再重建
-    if (isEmpty) {
-      if (scrollReadObserverRef.current) {
-        scrollReadObserverRef.current.disconnect();
-        scrollReadObserverRef.current = null;
-      }
-      observedArticleIds.current.clear();
-      scrollReadPendingIds.current.clear();
-      return;
+    function checkScrolledPast() {
+      if (!container || !markReadOnScrollRef.current) return;
+      const containerTop = container.getBoundingClientRect().top;
+      container.querySelectorAll<HTMLElement>('[data-article-id]').forEach((el) => {
+        const id = el.dataset.articleId;
+        if (!id) return;
+        if (scrollReadPendingIds.current.has(id)) return;
+        // 文章底部已滚出容器顶部
+        if (el.getBoundingClientRect().bottom <= containerTop) {
+          const article = articlesRef.current.find((a) => a.id === id);
+          if (!article || article.isRead) return;
+          scrollReadPendingIds.current.add(id);
+          setArticles((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: true } : a)));
+          if (filterRef.current.type === 'unread') decDisplayTotal();
+          api.markRead(id).catch(() => {});
+        }
+      });
     }
 
-    if (!container || !markReadOnScroll) {
-      if (scrollReadObserverRef.current) {
-        scrollReadObserverRef.current.disconnect();
-        scrollReadObserverRef.current = null;
-      }
-      observedArticleIds.current.clear();
-      scrollReadPendingIds.current.clear();
-      return;
-    }
-
-    // 有文章 & 功能开启：按需创建 observer
-    if (!scrollReadObserverRef.current) {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          if (!markReadOnScrollRef.current) return;
-          for (const entry of entries) {
-            // 文章完全离开滚动容器顶部（向上滚出）
-            if (!entry.isIntersecting && entry.rootBounds && entry.boundingClientRect.bottom < entry.rootBounds.top) {
-              const id = (entry.target as HTMLElement).dataset.articleId;
-              if (!id) continue;
-              if (scrollReadPendingIds.current.has(id)) continue;
-
-              // 用 articlesRef 读最新状态，避免闭包过期
-              const article = articlesRef.current.find((a) => a.id === id);
-              if (!article || article.isRead) continue;
-
-              // 标记处理中，防止重复触发
-              scrollReadPendingIds.current.add(id);
-
-              // 乐观更新 UI（setState 回调保持纯函数）
-              setArticles((prev) =>
-                prev.map((a) => (a.id === id ? { ...a, isRead: true } : a))
-              );
-              decDisplayTotal();
-
-              // 发请求：直接调 api，不走 markArticleRead（避免重复更新 store unreadCount）
-              api.markRead(id).catch(() => {});
-
-              observer.unobserve(entry.target);
-              observedArticleIds.current.delete(id);
-            }
-          }
-        },
-        { root: container, threshold: 0 }
-      );
-      scrollReadObserverRef.current = observer;
-    }
-
-    // 将尚未注册的文章条目加入观察
-    container.querySelectorAll('[data-article-id]').forEach((el) => {
-      const id = (el as HTMLElement).dataset.articleId!;
-      if (!observedArticleIds.current.has(id)) {
-        scrollReadObserverRef.current!.observe(el);
-        observedArticleIds.current.add(id);
-      }
-    });
+    container.addEventListener('scroll', checkScrolledPast, { passive: true });
+    return () => container.removeEventListener('scroll', checkScrolledPast);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [articles, markReadOnScroll]);
+  }, [markReadOnScroll]);
 
   // Infinite scroll
   const pageRef = useRef(page);
@@ -302,7 +252,7 @@ export default function ArticleList() {
       setArticles((prev) =>
         prev.map((a) => (a.id === article.id ? { ...a, isRead: true } : a))
       );
-      decDisplayTotal();
+      if (filter.type === 'unread') decDisplayTotal();
       // 直接发请求，不经过 markArticleRead（避免与 ArticlePage.onRead 重复更新 store unreadCount）
       api.markRead(article.id).catch(() => {});
     }
@@ -392,7 +342,7 @@ export default function ArticleList() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="font-heading font-semibold text-sm text-[#2C2C24] flex-shrink-0">{title}</h2>
-            <span className="text-[11px] text-[#78786C]/60">{displayTotal} 篇</span>
+            <span className="text-[11px] text-[#78786C]/60">{filter.type === 'unread' ? displayTotal : total} 篇</span>
           </div>
           <div className="flex items-center gap-1">
             {/* AI filter toggle */}

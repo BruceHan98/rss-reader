@@ -160,6 +160,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   const isScrolling = useRef(false);
   const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrollY = useRef(0);
+  const saveScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchCancelRef = useRef(false);
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
@@ -238,9 +239,31 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   useEffect(() => {
     fetchCancelRef.current = false;
     fetchArticle();
-    return () => { fetchCancelRef.current = true; };
+    return () => {
+      fetchCancelRef.current = true;
+      // 离开时保存当前滚动位置
+      if (scrollRef.current && scrollRef.current.scrollTop > 0) {
+        localStorage.setItem(`read-pos:${articleId}`, String(scrollRef.current.scrollTop));
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId]);
+
+  // 文章加载完成后，恢复上次已读位置
+  useEffect(() => {
+    if (!article || !scrollRef.current) return;
+    const saved = localStorage.getItem(`read-pos:${article.id}`);
+    if (saved) {
+      const pos = parseInt(saved, 10);
+      if (pos > 0) {
+        // 等内容渲染后再恢复，避免内容未就绪导致滑动无效
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ top: pos, behavior: 'instant' });
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article?.id]);
 
   useEffect(() => {
     if (!article) return;
@@ -294,14 +317,26 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   async function handleStar() {
     if (!article) return;
-    const res = await api.toggleStar(article.id);
-    setArticle({ ...article, isStarred: res.isStarred });
+    const snapshot = article;
+    setArticle({ ...article, isStarred: !article.isStarred }); // 乐观更新
+    try {
+      const res = await api.toggleStar(article.id);
+      setArticle({ ...snapshot, isStarred: res.isStarred });
+    } catch {
+      setArticle(snapshot); // 失败回滚
+    }
   }
 
   async function handleReadLater() {
     if (!article) return;
-    const res = await api.toggleReadLater(article.id);
-    setArticle({ ...article, isReadLater: res.isReadLater });
+    const snapshot = article;
+    setArticle({ ...article, isReadLater: !article.isReadLater }); // 乐观更新
+    try {
+      const res = await api.toggleReadLater(article.id);
+      setArticle({ ...snapshot, isReadLater: res.isReadLater });
+    } catch {
+      setArticle(snapshot); // 失败回滚
+    }
   }
 
   if (loading) {
@@ -497,8 +532,15 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         ref={scrollRef}
         className="flex-1 overflow-y-auto overflow-x-hidden"
         onScroll={(e) => {
-          if (window.innerWidth >= 768) return;
           const el=e.currentTarget;
+          // 节流保存阅读位置（500ms 防抖）
+          if (saveScrollTimer.current) clearTimeout(saveScrollTimer.current);
+          saveScrollTimer.current = setTimeout(() => {
+            if (el.scrollTop > 0) {
+              localStorage.setItem(`read-pos:${articleId}`, String(el.scrollTop));
+            }
+          }, 500);
+          if (window.innerWidth >= 768) return;
           const delta=el.scrollTop-lastScrollY.current;
           lastScrollY.current=el.scrollTop;
           // 滚动时进入沉浸模式（离开顶部 40px 以内不隐藏）
