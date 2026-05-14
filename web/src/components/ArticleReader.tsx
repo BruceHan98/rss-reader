@@ -282,28 +282,28 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       const img = el as HTMLImageElement;
       img.loading = 'lazy';
 
-      // 通过服务端代理加载图片，绕过防盗链
-      // 传入文章原始 URL 作为 Referer，这是图片最自然的来源页面
       const src = img.getAttribute('src');
       if (!src || (!src.startsWith('http://') && !src.startsWith('https://'))) return;
+      // 已经是代理 URL，跳过（避免重复处理）
+      if (src.startsWith('/api/img-proxy')) return;
 
       const proxyUrl = article.url
         ? `/api/img-proxy?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(article.url)}`
         : `/api/img-proxy?url=${encodeURIComponent(src)}`;
 
-      // 先注册 onerror 再赋值 src，防止快速失败时丢失回调
-      // 网络抖动时自动重试最多 2 次（800ms、1600ms），全失败才显示占位
-      let retries = 0;
-      const MAX_RETRIES = 2;
+      // 策略：先让图片直接加载（不替换 src）
+      // 失败后才降级走服务端代理（绕过防盗链），代理失败再重试一次，最终仍失败才显示占位
+      let stage = 0; // 0=直连, 1=代理, 2=代理重试
       img.onerror = () => {
-        if (retries < MAX_RETRIES) {
-          retries++;
-          const delay = 800 * retries;
-          setTimeout(() => {
-            // 加时间戳 bust 缓存，避免浏览器直接返回缓存的失败结果
-            img.src = `${proxyUrl}&_r=${retries}`;
-          }, delay);
+        stage++;
+        if (stage === 1) {
+          // 直连失败 → 走代理
+          img.src = proxyUrl;
+        } else if (stage === 2) {
+          // 代理首次失败 → 加时间戳重试一次
+          setTimeout(() => { img.src = `${proxyUrl}&_r=1`; }, 800);
         } else {
+          // 全部失败 → 显示占位
           img.onerror = null;
           const placeholder = document.createElement('div');
           placeholder.className = 'article-img-error';
@@ -311,9 +311,9 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           img.replaceWith(placeholder);
         }
       };
-      img.src = proxyUrl;
     });
-  }, [article]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article?.id]);
 
   async function handleStar() {
     if (!article) return;

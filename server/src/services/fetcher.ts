@@ -147,11 +147,15 @@ export async function fetchAllFeeds(): Promise<void> {
   const allFeeds = await db.select().from(feeds);
   const now = Date.now();
 
-  for (const feed of allFeeds) {
+  const dueFeeds = allFeeds.filter((feed) => {
     const intervalMs = (feed.fetchInterval || 60) * 60 * 1000;
     const lastFetched = feed.lastFetchedAt ? new Date(feed.lastFetchedAt).getTime() : 0;
-    if (now - lastFetched >= intervalMs) {
-      await fetchFeed(feed);
-    }
+    return now - lastFetched >= intervalMs;
+  });
+
+  // 并发拉取，最多 5 个同时进行
+  const CONCURRENCY = 5;
+  for (let i = 0; i < dueFeeds.length; i += CONCURRENCY) {
+    await Promise.all(dueFeeds.slice(i, i + CONCURRENCY).map((feed) => fetchFeed(feed)));
   }
 }

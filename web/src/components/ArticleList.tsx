@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, type Article, type AiTag } from '../lib/api';
 import { cn, relativeTime } from '../lib/utils';
-import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Menu, Rss } from 'lucide-react';
+import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Menu, Rss, CheckCircle, AlertCircle } from 'lucide-react';
 
 const PAGE_SIZE = 30;
 
@@ -40,6 +40,12 @@ export default function ArticleList() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [aiQuickTrigger, setAiQuickTrigger] = useState<'score' | 'tags' | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  function showToast(msg: string, type: 'success' | 'error') {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }
 
   const loaderRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -261,16 +267,26 @@ export default function ArticleList() {
     navigate(`/article/${article.id}`);
   }
 
-  async function handleRefreshAll() {
+  async function handleRefresh() {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await api.refreshAll();
-      await loadFeeds();
-      setArticles([]);
-      setTotal(0);
-      setPage(1);
+      if (filter.type === 'feed' && filter.feedId) {
+        const res = await api.refreshFeed(filter.feedId);
+        await loadFeeds();
+        if (res.error) {
+          showToast(`拉取失败：${res.error}`, 'error');
+        } else {
+          showToast(res.newArticles > 0 ? `获取到 ${res.newArticles} 篇新文章` : '暂无新文章', 'success');
+        }
+      } else {
+        const res = await api.refreshAll();
+        await loadFeeds();
+        showToast(res.newArticles > 0 ? `获取到 ${res.newArticles} 篇新文章` : '暂无新文章', 'success');
+      }
       await loadArticles(1, true);
+    } catch {
+      showToast('刷新失败，请检查网络', 'error');
     } finally {
       setRefreshing(false);
     }
@@ -375,12 +391,12 @@ export default function ArticleList() {
             >
               {aiQuickTrigger === 'tags' ? <Loader2 size={13} className="animate-spin" /> : <Hash size={13} />}
             </button>
-            {filter.type === 'all' && (
+            {(filter.type === 'all' || filter.type === 'feed' || filter.type === 'group') && (
               <button
-                onClick={handleRefreshAll}
+                onClick={handleRefresh}
                 disabled={refreshing}
                 className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0 disabled:opacity-40"
-                title="刷新所有订阅"
+                title={filter.type === 'feed' ? '刷新该订阅源' : '刷新所有订阅'}
               >
                 <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
               </button>
@@ -507,11 +523,33 @@ export default function ArticleList() {
           {loading && <Loader2 size={18} className="animate-spin text-[#5D7052]/50" />}
         </div>
       </div>
+          {/* Toast */}
+      {toast && (
+        <div
+          className={cn(
+            'fixed bottom-20 lg:bottom-5 left-1/2 -translate-x-1/2 z-50',
+            'flex items-center gap-2.5 px-4 py-3 rounded-2xl',
+            'shadow-[0_8px_24px_-4px_rgba(44,44,36,0.18)]',
+            'text-sm font-medium min-w-[240px] max-w-[320px]',
+            'animate-[slideUp_0.2s_ease-out]',
+            toast.type === 'success' ? 'bg-[#5D7052] text-[#F3F4F1]' : 'bg-[#A85448] text-white'
+          )}
+        >
+          {toast.type === 'success'
+            ? <CheckCircle size={15} className="shrink-0" />
+            : <AlertCircle size={15} className="shrink-0" />}
+          <span className="flex-1">{toast.msg}</span>
+          <button onClick={() => setToast(null)} className="opacity-70 hover:opacity-100 active:scale-95">
+            <X size={13} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function ArticleItem({
+function 
+ArticleItem({
   article, selected, onSelect,
 }: {
   article: Article;
@@ -549,8 +587,8 @@ function ArticleItem({
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         )}
-        <span className="text-[10px] text-[#78786C]/80 truncate font-medium">{article.feed_title}</span>
-        <span className="text-[10px] text-[#C8C4BB] ml-auto flex-shrink-0">
+        <span className="text-[11px] text-[#78786C]/80 truncate font-medium">{article.feed_title}</span>
+        <span className="text-[11px] text-[#C8C4BB] ml-auto flex-shrink-0">
           {relativeTime(article.publishedAt)}
         </span>
       </div>
@@ -558,7 +596,7 @@ function ArticleItem({
       {/* Title */}
       <h3
         className={cn(
-          'text-[14px] leading-snug mb-1 line-clamp-2',
+          'text-[15px] leading-snug mb-1 line-clamp-2',
           article.isRead
             ? 'text-[#78786C] font-normal'
             : 'text-[#2C2C24] font-semibold'
@@ -569,7 +607,7 @@ function ArticleItem({
 
       {/* Summary */}
       {article.summary && (
-        <p className="text-[11px] text-[#78786C]/70 line-clamp-2 leading-relaxed mt-0.5">
+        <p className="text-[12px] text-[#78786C]/70 line-clamp-2 leading-relaxed mt-0.5">
           {article.summary}
         </p>
       )}
