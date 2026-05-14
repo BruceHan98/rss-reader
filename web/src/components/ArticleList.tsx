@@ -34,6 +34,7 @@ export default function ArticleList() {
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [total, setTotal] = useState(0);
+  const [displayTotal, setDisplayTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,10 @@ export default function ArticleList() {
   const selectedTagsRef = useRef(selectedTags);
   useEffect(() => { minScoreRef.current = minScore; }, [minScore]);
   useEffect(() => { selectedTagsRef.current = selectedTags; }, [selectedTags]);
+
+  // articlesRef: 让 IntersectionObserver 闭包始终能读到最新的 articles 状态
+  const articlesRef = useRef(articles);
+  useEffect(() => { articlesRef.current = articles; }, [articles]);
 
   // Load AI tags list once
   useEffect(() => {
@@ -121,6 +126,7 @@ export default function ArticleList() {
 
       const data = await api.getArticles(params, signal);
       setTotal(data.total);
+      if (reset) setDisplayTotal(data.total);
       setHasMore(data.articles.length === PAGE_SIZE);
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
       setPage(p);
@@ -139,6 +145,7 @@ export default function ArticleList() {
   useEffect(() => {
     setArticles([]);
     setTotal(0);
+    setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
     loadArticles(1, true);
@@ -154,6 +161,7 @@ export default function ArticleList() {
     }
     setArticles([]);
     setTotal(0);
+    setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
     loadArticles(1, true);
@@ -212,15 +220,24 @@ export default function ArticleList() {
             if (!entry.isIntersecting && entry.rootBounds && entry.boundingClientRect.bottom < entry.rootBounds.top) {
               const id = (entry.target as HTMLElement).dataset.articleId;
               if (!id) continue;
-              // Use ref-based guard to prevent duplicate triggers before React state updates
               if (scrollReadPendingIds.current.has(id)) continue;
-              setArticles((prev) => {
-                const article = prev.find((a) => a.id === id);
-                if (!article || article.isRead) return prev;
-                scrollReadPendingIds.current.add(id);
-                markArticleRead(id, true, article.feedId).catch(() => {});
-                return prev.map((a) => (a.id === id ? { ...a, isRead: true } : a));
-              });
+
+              // 用 articlesRef 读最新状态，避免闭包过期
+              const article = articlesRef.current.find((a) => a.id === id);
+              if (!article || article.isRead) continue;
+
+              // 标记处理中，防止重复触发
+              scrollReadPendingIds.current.add(id);
+
+              // 乐观更新 UI（setState 回调保持纯函数）
+              setArticles((prev) =>
+                prev.map((a) => (a.id === id ? { ...a, isRead: true } : a))
+              );
+              setDisplayTotal((prev) => Math.max(0, prev - 1));
+
+              // 发请求：直接调 api，不走 markArticleRead（避免重复更新 store unreadCount）
+              api.markRead(id).catch(() => {});
+
               observer.unobserve(entry.target);
               observedArticleIds.current.delete(id);
             }
@@ -261,11 +278,14 @@ export default function ArticleList() {
   }, [loading, hasMore]);
 
   async function handleSelect(article: Article) {
-    // Optimistically update local UI only; API call is handled by ArticleReader via onRead
     if (!article.isRead) {
+      // 乐观更新本地列表显示（isRead + 计数），实际标记由 ArticleReader.onRead 负责
       setArticles((prev) =>
         prev.map((a) => (a.id === article.id ? { ...a, isRead: true } : a))
       );
+      setDisplayTotal((prev) => Math.max(0, prev - 1));
+      // 直接发请求，不经过 markArticleRead（避免与 ArticlePage.onRead 重复更新 store unreadCount）
+      api.markRead(article.id).catch(() => {});
     }
 
     setSelectedArticle(article.id);
@@ -308,6 +328,7 @@ export default function ArticleList() {
       filter.type === 'group' ? { groupId: filter.groupId } : undefined;
     await markAllRead(params);
     setArticles((prev) => prev.map((a) => ({ ...a, isRead: true })));
+    setDisplayTotal(0);
     if (filter.type === 'unread') {
       setTotal(0);
       setHasMore(false);
@@ -351,7 +372,7 @@ export default function ArticleList() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="font-heading font-semibold text-sm text-[#2C2C24] flex-shrink-0">{title}</h2>
-            <span className="text-[11px] text-[#78786C]/60">{total} 篇</span>
+            <span className="text-[11px] text-[#78786C]/60">{displayTotal} 篇</span>
           </div>
           <div className="flex items-center gap-1">
             {/* AI filter toggle */}
