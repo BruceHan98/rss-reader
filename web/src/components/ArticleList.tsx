@@ -141,13 +141,13 @@ export default function ArticleList() {
   // Always keep the ref pointing at the latest loadArticles (captures current filter/minScore/tags)
   loadArticlesRef.current = loadArticles;
 
-  // Reload when filter changes
+  // Reload when filter changes（不提前清空，保留旧内容直到新数据返回，避免白屏闪烁）
   useEffect(() => {
-    setArticles([]);
     setTotal(0);
     setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
+    scrollContainerRef.current?.scrollTo({ top: 0 });
     loadArticles(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
@@ -159,7 +159,6 @@ export default function ArticleList() {
       isFirstAiFilterRunRef.current = false;
       return;
     }
-    setArticles([]);
     setTotal(0);
     setDisplayTotal(0);
     setHasMore(false);
@@ -509,7 +508,7 @@ export default function ArticleList() {
       </div>
 
       {/* List */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[3.5rem] lg:pb-0">
+      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto pb-[3.5rem] lg:pb-0 transition-opacity duration-150 ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
         {articles.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-[#78786C]">
             <div className="w-16 h-16 rounded-full bg-[#E6DCCD]/60 flex items-center justify-center">
