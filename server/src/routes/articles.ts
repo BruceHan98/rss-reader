@@ -88,7 +88,7 @@ export async function articleRoutes(app: FastifyInstance) {
          FROM articles a
          JOIN feeds f ON f.id = a.feed_id
          WHERE ${where}
-         ORDER BY COALESCE(a.published_at, a.created_at) DESC
+         ORDER BY a.effective_date DESC
          LIMIT ? OFFSET ?`
       )
       .all(...params, limit, offset);

@@ -50,7 +50,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         sqlite
           .prepare(
             `SELECT COUNT(*) as cnt FROM articles
-             WHERE published_at < ? AND is_starred = 0 AND is_read_later = 0`
+             WHERE published_at < ? AND is_read = 1 AND is_starred = 0 AND is_read_later = 0`
           )
           .get(cutoff) as any
       ).cnt;
@@ -59,7 +59,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     const result = sqlite
       .prepare(
-        `DELETE FROM articles WHERE published_at < ? AND is_starred = 0 AND is_read_later = 0`
+        `DELETE FROM articles WHERE published_at < ? AND is_read = 1 AND is_starred = 0 AND is_read_later = 0`
       )
       .run(cutoff);
 

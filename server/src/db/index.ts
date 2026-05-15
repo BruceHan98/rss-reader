@@ -99,9 +99,17 @@ sqlite.exec(`
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN ai_score INTEGER'); } catch {}
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN ai_tags TEXT'); } catch {}
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN read_at TEXT'); } catch {}
+// 生成列：统一排序字段，避免每次查询都用 COALESCE 表达式做全表临时排序
+try { sqlite.exec("ALTER TABLE articles ADD COLUMN effective_date TEXT GENERATED ALWAYS AS (COALESCE(published_at, created_at)) VIRTUAL"); } catch {}
 // ai_score 索引需在列存在后创建
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_ai_score ON articles(ai_score)'); } catch {}
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_read_at ON articles(read_at)'); } catch {}
+// 复合索引：覆盖常用过滤条件 + 排序，避免全表扫描和临时排序
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_unread_date ON articles(is_read, effective_date DESC)'); } catch {}
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_starred_date ON articles(is_starred, effective_date DESC)'); } catch {}
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_read_later_date ON articles(is_read_later, effective_date DESC)'); } catch {}
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_date ON articles(feed_id, effective_date DESC)'); } catch {}
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(effective_date DESC)'); } catch {}
 
 // 默认设置，首次启动写入，后续补充可能缺失的 key
 const DEFAULT_SETTINGS: Record<string, string> = {

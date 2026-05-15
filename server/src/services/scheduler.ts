@@ -26,7 +26,7 @@ function runCleanup() {
   if (days <= 0) return;
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   const result = sqlite
-    .prepare('DELETE FROM articles WHERE published_at < ? AND is_starred = 0 AND is_read_later = 0')
+    .prepare('DELETE FROM articles WHERE published_at < ? AND is_read = 1 AND is_starred = 0 AND is_read_later = 0')
     .run(cutoff);
   console.log(`[Cleanup] Deleted ${result.changes} old articles`);
 }
