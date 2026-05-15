@@ -110,6 +110,8 @@ try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_starred_date ON artic
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_read_later_date ON articles(is_read_later, effective_date DESC)'); } catch {}
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_date ON articles(feed_id, effective_date DESC)'); } catch {}
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(effective_date DESC)'); } catch {}
+// 专用于 /api/feeds unreadCount 子查询：WHERE feed_id = ? AND is_read = 0
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_unread ON articles(feed_id, is_read)'); } catch {}
 
 // 默认设置，首次启动写入，后续补充可能缺失的 key
 const DEFAULT_SETTINGS: Record<string, string> = {
