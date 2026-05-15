@@ -66,6 +66,8 @@ export default function ArticleList() {
 
   // 各 filter key 对应的 displayTotal 缓存，切换 tab 时先显示缓存值
   const displayTotalCacheRef = useRef<Map<string, number>>(new Map());
+  // 各 filter key 对应的第一页文章列表缓存，切换 tab 时先显示缓存，后台静默刷新
+  const articleListCacheRef = useRef<Map<string, Article[]>>(new Map());
   function getFilterKey(f: typeof filter): string {
     if (f.type === 'feed') return `feed:${f.feedId}`;
     if (f.type === 'group') return `group:${f.groupId}`;
@@ -118,9 +120,9 @@ export default function ArticleList() {
 
   // Keep a ref to loadArticles so the ai-job-done handler always calls the latest version
   // (avoids stale closure over `filter` state)
-  const loadArticlesRef = useRef<(p?: number, reset?: boolean) => Promise<void>>();
+  const loadArticlesRef = useRef<(p?: number, reset?: boolean, silent?: boolean) => Promise<void>>();
 
-  async function loadArticles(p = 1, reset = false) {
+  async function loadArticles(p = 1, reset = false, silent = false) {
     // 取消上一个未完成的请求，防止旧响应覆盖新数据（竞态条件）
     if (reset) {
       abortControllerRef.current?.abort();
@@ -128,7 +130,7 @@ export default function ArticleList() {
     }
     const signal = reset ? abortControllerRef.current!.signal : undefined;
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const params: Record<string, string | number | undefined> = {
         page: p,
@@ -148,6 +150,8 @@ export default function ArticleList() {
       if (reset) {
         setDisplayTotal(data.total);
         displayTotalCacheRef.current.set(getFilterKey(filter), data.total);
+        // 缓存第一页结果，供下次切回该 tab 时立即展示
+        if (p === 1) articleListCacheRef.current.set(getFilterKey(filter), data.articles);
       }
       setHasMore(data.articles.length === PAGE_SIZE);
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
@@ -155,24 +159,35 @@ export default function ArticleList() {
     } catch (err: any) {
       // 请求被主动取消时不更新状态（新请求正在进行中）
       if (err?.name === 'AbortError') return;
-      setLoading(false);
+      if (!silent) setLoading(false);
       throw err;
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
   // Always keep the ref pointing at the latest loadArticles (captures current filter/minScore/tags)
   loadArticlesRef.current = loadArticles;
 
-  // Reload when filter changes（不提前清空文章列表，保留旧内容直到新数据返回，避免白屏闪烁；数量先恢复该tab的缓存值）
+  // Reload when filter changes
   useEffect(() => {
-    const cached = displayTotalCacheRef.current.get(getFilterKey(filter)) ?? 0;
-    setTotal(cached);
-    setDisplayTotal(cached);
+    const key = getFilterKey(filter);
+    const cachedTotal = displayTotalCacheRef.current.get(key) ?? 0;
+    const cachedArticles = articleListCacheRef.current.get(key);
+
+    setTotal(cachedTotal);
+    setDisplayTotal(cachedTotal);
     setHasMore(false);
     setPage(1);
     scrollReadPendingIds.current.clear(); // 清除旧 tab 的已读记录，防止 id 污染新 tab
     scrollContainerRef.current?.scrollTo({ top: 0 });
-    loadArticles(1, true);
+
+    if (cachedArticles) {
+      // 命中缓存：立即展示旧数据，后台静默刷新（不触发 loading 状态，避免闪烁）
+      setArticles(cachedArticles);
+      loadArticles(1, true, true);
+    } else {
+      // 无缓存：正常加载并显示 loading
+      loadArticles(1, true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
@@ -187,6 +202,8 @@ export default function ArticleList() {
     setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
+    // AI 筛选条件变化后，缓存的第一页结果已失效，清除
+    articleListCacheRef.current.delete(getFilterKey(filterRef.current));
     loadArticles(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minScore, selectedTags]);

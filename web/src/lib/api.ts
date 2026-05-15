@@ -91,6 +91,12 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
+// 会话级文章详情内存缓存（刷新页面后自动清除）
+const articleDetailCache = new Map<string, Article>();
+export function invalidateArticleCache(id: string) {
+  articleDetailCache.delete(id);
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...options?.headers as Record<string, string> };
   if (options?.body) headers['Content-Type'] = 'application/json';
@@ -137,12 +143,32 @@ export const api = {
     ).toString();
     return request<ArticleList>(`/articles?${q}`, signal ? { signal } : undefined);
   },
-  getArticle: (id: string) => request<Article>(`/articles/${id}`),
-  markRead: (id: string, isRead = true) =>
-    request<void>(`/articles/${id}/read`, { method: 'PUT', body: JSON.stringify({ isRead }) }),
-  toggleStar: (id: string) => request<{ isStarred: boolean }>(`/articles/${id}/star`, { method: 'PUT' }),
-  toggleReadLater: (id: string) =>
-    request<{ isReadLater: boolean }>(`/articles/${id}/read-later`, { method: 'PUT' }),
+  getArticle: async (id: string) => {
+    if (articleDetailCache.has(id)) return articleDetailCache.get(id)!;
+    const article = await request<Article>(`/articles/${id}`);
+    articleDetailCache.set(id, article);
+    return article;
+  },
+  markRead: (id: string, isRead = true) => {
+    // 同步更新缓存中的已读状态
+    const cached = articleDetailCache.get(id);
+    if (cached) articleDetailCache.set(id, { ...cached, isRead });
+    return request<void>(`/articles/${id}/read`, { method: 'PUT', body: JSON.stringify({ isRead }) });
+  },
+  toggleStar: async (id: string) => {
+    const res = await request<{ isStarred: boolean }>(`/articles/${id}/star`, { method: 'PUT' });
+    // 同步更新缓存中的收藏状态
+    const cached = articleDetailCache.get(id);
+    if (cached) articleDetailCache.set(id, { ...cached, isStarred: res.isStarred });
+    return res;
+  },
+  toggleReadLater: async (id: string) => {
+    const res = await request<{ isReadLater: boolean }>(`/articles/${id}/read-later`, { method: 'PUT' });
+    // 同步更新缓存中的稍后阅读状态
+    const cached = articleDetailCache.get(id);
+    if (cached) articleDetailCache.set(id, { ...cached, isReadLater: res.isReadLater });
+    return res;
+  },
   markAllRead: (params?: { feedId?: string; groupId?: string }) =>
     request<void>('/articles/mark-all-read', { method: 'POST', body: JSON.stringify(params || {}) }),
 

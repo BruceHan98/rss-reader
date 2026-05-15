@@ -282,10 +282,23 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       const img = el as HTMLImageElement;
       img.loading = 'lazy';
 
-      const src = img.getAttribute('src');
-      if (!src || (!src.startsWith('http://') && !src.startsWith('https://'))) return;
+      let src = img.getAttribute('src');
+      if (!src) return;
       // 已经是代理 URL，跳过（避免重复处理）
       if (src.startsWith('/api/img-proxy')) return;
+
+      // 相对路径（如 /_next/image?...）：补全文章来源域名，使其成为可代理的绝对 URL
+      if (!src.startsWith('http://') && !src.startsWith('https://')) {
+        if (!article.url) return; // 无来源 URL，无法补全，跳过
+        try {
+          const origin = new URL(article.url).origin;
+          src = origin + (src.startsWith('/') ? src : '/' + src);
+          img.src = src; // 先用绝对 URL 替换，让直连尝试也能生效
+          img.removeAttribute('srcset'); // 清除 srcset，防止浏览器优先用 srcset 中的相对路径
+        } catch {
+          return;
+        }
+      }
 
       const proxyUrl = article.url
         ? `/api/img-proxy?url=${encodeURIComponent(src)}&referer=${encodeURIComponent(article.url)}`
