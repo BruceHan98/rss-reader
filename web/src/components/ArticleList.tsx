@@ -4,13 +4,10 @@ import { useStore } from '../store';
 import { api, type Article, type AiTag } from '../lib/api';
 import { cn, relativeTime } from '../lib/utils';
 import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Menu, Rss, CheckCircle, AlertCircle } from 'lucide-react';
+import FeedIcon from './FeedIcon';
 
 const PAGE_SIZE = 30;
 
-function articleFaviconUrl(article: Article): string {
-  if (article.feed_favicon) return article.feed_favicon;
-  try { return new URL(article.url!).origin + '/favicon.ico'; } catch { return ''; }
-}
 
 export default function ArticleList() {
   const {
@@ -596,14 +593,12 @@ ArticleItem({
 
       {/* Feed source + time */}
       <div className="flex items-center gap-1.5 mb-1.5 pr-4">
-        {articleFaviconUrl(article) && (
-          <img
-            src={articleFaviconUrl(article)}
-            alt=""
-            className="w-3 h-3 rounded-full flex-shrink-0"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
-        )}
+        <FeedIcon
+          favicon={article.feed_favicon}
+          url={article.url || ''}
+          title={article.feed_title || ''}
+          className="w-3 h-3"
+        />
         <span className="text-[11px] text-[#78786C]/80 truncate font-medium">{article.feed_title}</span>
         <span className="text-[11px] text-[#C8C4BB] ml-auto flex-shrink-0">
           {relativeTime(article.publishedAt)}

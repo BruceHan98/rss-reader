@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { cn, getFaviconUrl } from '../lib/utils';
+import { cn } from '../lib/utils';
 import AddFeedModal from './AddFeedModal';
+import FeedIcon from './FeedIcon';
 import {
   Rss, Star, Clock, Search, Settings, ChevronDown, ChevronRight,
   Plus, RefreshCw, Trash2, Inbox, BookOpen,
@@ -337,8 +338,6 @@ function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete }: {
   onRefresh: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
 }) {
-  const faviconUrl = getFaviconUrl(feed);
-
   return (
     <div
       className={cn(
@@ -349,11 +348,7 @@ function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete }: {
       )}
       onClick={onSelect}
     >
-      <img
-        src={faviconUrl} alt=""
-        className="w-4 h-4 rounded-full object-cover flex-shrink-0"
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-      />
+      <FeedIcon favicon={feed.favicon} siteUrl={feed.siteUrl} url={feed.url} title={feed.title} className="w-4 h-4" />
       <span className="flex-1 truncate text-[13px] min-w-0">{feed.title}</span>
 
       {/* 未读数：非活跃且无 hover 时显示 */}

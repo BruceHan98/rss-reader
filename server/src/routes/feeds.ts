@@ -31,13 +31,16 @@ export async function feedRoutes(app: FastifyInstance) {
   app.post<{
     Body: { url: string; title?: string; groupId?: string; fetchInterval?: number };
   }>('/api/feeds', async (req, reply) => {
-    const { url, title, groupId, fetchInterval = 60 } = req.body;
-    if (!url) return reply.status(400).send({ error: 'URL 不能为空' });
-    if (!isPublicUrl(url)) return reply.status(400).send({ error: "不支持的 URL：仅允许公网地址" });
+    const { url: rawUrl, title, groupId, fetchInterval = 60 } = req.body;
+    if (!rawUrl) return reply.status(400).send({ error: 'URL 不能为空' });
+    if (!isPublicUrl(rawUrl)) return reply.status(400).send({ error: "不支持的 URL：仅允许公网地址" });
+    // 规范化 URL：去掉尾部斜杠，避免 /feed 和 /feed/ 被当成两个不同的源
+    const url = rawUrl.replace(/\/+$/, '');
 
-    // 检查是否已存在
+    // 检查是否已存在（同时检查带/不带尾部斜杠的变体）
     const existing = await db.select().from(feeds).where(eq(feeds.url, url));
-    if (existing.length) return reply.status(409).send({ error: '订阅源已存在' });
+    const existingWithSlash = await db.select().from(feeds).where(eq(feeds.url, url + '/'));
+    if (existing.length || existingWithSlash.length) return reply.status(409).send({ error: '订阅源已存在' });
 
     const id = uuidv4();
     await db.insert(feeds).values({

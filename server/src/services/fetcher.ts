@@ -72,12 +72,31 @@ export async function fetchFeed(feed: Feed): Promise<{ count: number; error?: st
 
     // 每次拉取都同步 title / siteUrl / favicon
     const feedTitle = parsed.title?.trim();
-    const siteUrl = parsed.link?.trim() || '';
-    const favicon = siteUrl ? `${new URL(siteUrl).origin}/favicon.ico` : '';
+    // parsed.link 有时指向 feed 自身（如 /feed、/rss、/atom 等路径），
+    // 这种情况应取 origin 作为网站主页，而非 feed 地址
+    const rawLink = parsed.link?.trim() || '';
+    let siteUrl = '';
+    if (rawLink) {
+      try {
+        const linkUrl = new URL(rawLink);
+        const feedPath = linkUrl.pathname.toLowerCase().replace(/\/$/, '');
+        const isFeedPath = /\/(feed|rss|atom|feed\.xml|rss\.xml|atom\.xml)$/.test(feedPath);
+        siteUrl = isFeedPath ? linkUrl.origin : rawLink;
+      } catch {
+        siteUrl = rawLink;
+      }
+    }
     const metaUpdates: Record<string, string | null> = {};
     if (feedTitle && feed.title === feed.url) metaUpdates.title = feedTitle;
     if (siteUrl && !feed.siteUrl) metaUpdates.siteUrl = siteUrl;
-    if (favicon && !feed.favicon) metaUpdates.favicon = favicon;
+    // 只在 favicon 未存储时尝试探测，避免每次拉取都发请求
+    if (!feed.favicon && siteUrl) {
+      const faviconUrl = `${new URL(siteUrl).origin}/favicon.ico`;
+      const ok = await fetch(faviconUrl, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+        .then((r) => r.ok)
+        .catch(() => false);
+      if (ok) metaUpdates.favicon = faviconUrl;
+    }
     if (Object.keys(metaUpdates).length) {
       await db.update(feeds).set(metaUpdates).where(eq(feeds.id, feed.id));
     }
