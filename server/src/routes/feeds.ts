@@ -4,6 +4,7 @@ import { feeds, groups, articles } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { fetchFeed, isPublicUrl } from '../services/fetcher.js';
+import { maybeRunAutoAi } from '../services/scheduler.js';
 
 export async function feedRoutes(app: FastifyInstance) {
   // GET /api/feeds - 获取所有订阅源（含分组信息 + 未读数）
@@ -87,6 +88,7 @@ export async function feedRoutes(app: FastifyInstance) {
     const newArticles = results.reduce((sum, r) => {
       return sum + (r.status === 'fulfilled' ? r.value.count : 0);
     }, 0);
+    maybeRunAutoAi();
     return { newArticles, total: allFeeds.length };
   });
 
@@ -95,6 +97,7 @@ export async function feedRoutes(app: FastifyInstance) {
     const feed = await db.select().from(feeds).where(eq(feeds.id, req.params.id)).then((r) => r[0]);
     if (!feed) return reply.status(404).send({ error: '订阅源不存在' });
     const result = await fetchFeed(feed);
+    if (result.count > 0) maybeRunAutoAi();
     return { newArticles: result.count, error: result.error };
   });
 }

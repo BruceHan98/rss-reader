@@ -47,11 +47,25 @@ interface AppState {
   markAllRead: (params?: { feedId?: string; groupId?: string }) => Promise<void>;
 }
 
+function loadFilterFromSession(): Filter {
+  try {
+    const raw = sessionStorage.getItem('rss-filter');
+    if (raw) return JSON.parse(raw) as Filter;
+  } catch {}
+  return { type: 'all' };
+}
+
+function saveFilterToSession(filter: Filter) {
+  try {
+    sessionStorage.setItem('rss-filter', JSON.stringify(filter));
+  } catch {}
+}
+
 export const useStore = create<AppState>((set, get) => ({
   feeds: [],
   groups: [],
   settings: null,
-  filter: { type: 'all' },
+  filter: loadFilterFromSession(),
   selectedArticleId: null,
   searchQuery: '',
   sidebarOpen: typeof window !== "undefined" && window.innerWidth >= 1024,
@@ -74,7 +88,7 @@ export const useStore = create<AppState>((set, get) => ({
     applyFontSettings(settings.fontSize, settings.lineHeight);
   },
 
-  setFilter: (filter) => set({ filter, selectedArticleId: null }),
+  setFilter: (filter) => { saveFilterToSession(filter); set({ filter, selectedArticleId: null }); },
   setSelectedArticle: (id) => set({ selectedArticleId: id }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
@@ -88,7 +102,7 @@ export const useStore = create<AppState>((set, get) => ({
   deleteFeed: async (feedId) => {
     await api.deleteFeed(feedId);
     set((s) => ({ feeds: s.feeds.filter((f) => f.id !== feedId) }));
-    if (get().filter.feedId === feedId) set({ filter: { type: 'all' } });
+    if (get().filter.feedId === feedId) { const f = { type: 'all' as const }; saveFilterToSession(f); set({ filter: f }); }
   },
 
   addFeed: async (url, title, groupId) => {
@@ -109,7 +123,7 @@ export const useStore = create<AppState>((set, get) => ({
   deleteGroup: async (id) => {
     await api.deleteGroup(id);
     set((s) => ({ groups: s.groups.filter((g) => g.id !== id) }));
-    if (get().filter.groupId === id) set({ filter: { type: 'all' } });
+    if (get().filter.groupId === id) { const f = { type: 'all' as const }; saveFilterToSession(f); set({ filter: f }); }
     await get().loadFeeds(); // feeds 可能改变 groupId
   },
 

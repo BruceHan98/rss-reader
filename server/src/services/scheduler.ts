@@ -31,7 +31,7 @@ function runCleanup() {
   console.log(`[Cleanup] Deleted ${result.changes} old articles`);
 }
 
-function maybeRunAutoAi() {
+export function maybeRunAutoAi() {
   const autoAi = getSetting('autoAiAfterFetch', 'off');
   if (autoAi === 'off') return;
   const apiKey = getSetting('aiApiKey', '');
