@@ -93,7 +93,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={() => navTo('unread', '/')}
             />
             <BottomTabItem
-              icon={<Search size={20} />}
+              icon={<Search size={18} />}
               label="搜索"
               active={location.pathname === '/search'}
               onClick={() => navigate('/search')}
@@ -124,8 +124,8 @@ function BottomTabItem({
     <button
       onClick={onClick}
       className={cn(
-        'flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-all duration-200 active:scale-95 relative',
-        active ? 'text-[#5D7052]' : 'text-[#78786C]'
+        'flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 active:scale-95 relative',
+        active ? 'text-[#2C2C24]' : 'text-[#A8A89C]'
       )}
     >
       <span className="relative">
@@ -136,7 +136,13 @@ function BottomTabItem({
           </span>
         )}
       </span>
-      <span className="text-[10px]">{label}</span>
+
+      <span className={cn(
+        'text-[10px] transition-all duration-200',
+        active ? 'font-semibold' : 'font-medium'
+      )}>
+        {label}
+      </span>
     </button>
   );
 }

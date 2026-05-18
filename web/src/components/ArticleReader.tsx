@@ -30,7 +30,10 @@ const READER_STYLES = `
   .article-body h1 { font-size: 1.6rem; }
   .article-body h2 { font-size: 1.35rem; }
   .article-body h3 { font-size: 1.15rem; }
-  .article-body p { margin-bottom: 1.2em; }
+  .article-body p { margin-bottom: 1.2em; text-indent: 2em; }
+  .article-body p:has(> img:only-child),
+  .article-body p:has(> a > img:only-child) { text-indent: 0; }
+  .article-body pre p, .article-body code p { text-indent: 0; }
   .article-body a {
     color: #5D7052;
     text-decoration: underline;
@@ -385,11 +388,25 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     );
   }
 
-  const safeContent = DOMPurify.sanitize(article.content || article.summary || '', {
+  const rawContent = DOMPurify.sanitize(article.content || article.summary || '', {
     ADD_ATTR: ['target'],
     FORBID_TAGS: ['script', 'style'],
   // Remove stray quotes after closing tags — artifact of malformed RSS HTML
   }).replace(/<\/a>"/g, '</a>').replace(/<\/a>&#34;/g, '</a>').replace(/<\/a>&quot;/g, '</a>');
+
+  // 去除正文开头与页面标题重复的标题标签（h1/h2/h3）
+  // 部分 RSS feed 在内容里也包含文章标题，导致页面标题出现两次
+  const safeContent = (() => {
+    if (!article.title || !rawContent) return rawContent;
+    const normalizeText = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+    const titleNorm = normalizeText(article.title);
+    // 匹配开头的 h1/h2/h3 标签（允许有属性，允许前面有空白）
+    return rawContent.replace(/^(\s*<h[1-3][^>]*>)([\s\S]*?)(<\/h[1-3]>)/i, (match, open, inner, close) => {
+      // 去掉 inner 中所有 HTML 标签，只保留纯文本做比较
+      const innerText = normalizeText(inner.replace(/<[^>]+>/g, ''));
+      return innerText === titleNorm ? '' : match;
+    });
+  })();
 
   return (
     <div

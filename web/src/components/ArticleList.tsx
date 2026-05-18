@@ -12,6 +12,7 @@ const PAGE_SIZE = 30;
 export default function ArticleList() {
   const {
     filter, selectedArticleId, settings,
+    feeds, groups,
     setSelectedArticle, markArticleRead, markAllRead, loadFeeds, setSidebarOpen, sidebarOpen,
   } = useStore();
 
@@ -60,6 +61,10 @@ export default function ArticleList() {
   // articlesRef: 让 IntersectionObserver 闭包始终能读到最新的 articles 状态
   const articlesRef = useRef(articles);
   useEffect(() => { articlesRef.current = articles; }, [articles]);
+
+  // 游标：记录当前列表最后一篇文章的 publishedAt，翻页时作为 before 参数传给服务端
+  // 防止未读列表在用户阅读文章后，OFFSET 偏移导致后续页面文章丢失
+  const cursorRef = useRef<string | null>(null);
 
   // 各 filter key 对应的 displayTotal 缓存，切换 tab 时先显示缓存值
   const displayTotalCacheRef = useRef<Map<string, number>>(new Map());
@@ -142,6 +147,12 @@ export default function ArticleList() {
       if (minScoreRef.current > 0) params.minScore = minScoreRef.current;
       if (selectedTagsRef.current.length > 0) params.tags = selectedTagsRef.current.join(',');
 
+      // 翻页时使用游标（before）替代纯 OFFSET 分页，防止已读状态变化导致文章被跳过
+      if (!reset && p > 1 && cursorRef.current) {
+        params.before = cursorRef.current;
+        // 游标模式下服务端 offset=0，前端仍用 page 字段记录逻辑页码（但不影响服务端查询）
+      }
+
       const data = await api.getArticles(params, signal);
       setTotal(data.total);
       if (reset) {
@@ -149,6 +160,13 @@ export default function ArticleList() {
         displayTotalCacheRef.current.set(getFilterKey(filter), data.total);
         // 缓存第一页结果，供下次切回该 tab 时立即展示
         if (p === 1) articleListCacheRef.current.set(getFilterKey(filter), data.articles);
+        // 重置游标，记录第一页最后一篇文章的排序时间（effectiveDate = published_at ?? created_at）
+        const lastArticle = data.articles[data.articles.length - 1];
+        cursorRef.current = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? null;
+      } else if (data.articles.length > 0) {
+        // 翻页后更新游标为当前已加载列表的最后一篇文章时间
+        const lastArticle = data.articles[data.articles.length - 1];
+        cursorRef.current = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? cursorRef.current;
       }
       setHasMore(data.articles.length === PAGE_SIZE);
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
@@ -180,6 +198,8 @@ export default function ArticleList() {
     if (cachedArticles) {
       // 命中缓存：立即展示旧数据，后台静默刷新（不触发 loading 状态，避免闪烁）
       setArticles(cachedArticles);
+      // 缓存数据可能已过期，先假设可能有更多内容（避免无限滚动被锁死）
+      setHasMore(cachedArticles.length === PAGE_SIZE);
       loadArticles(1, true, true);
     } else {
       // 无缓存：正常加载并显示 loading
@@ -251,20 +271,25 @@ export default function ArticleList() {
   // Infinite scroll
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
+  const loadingRef = useRef(loading);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+  const hasMoreRef = useRef(hasMore);
+  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
 
   useEffect(() => {
     if (!loaderRef.current) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !loading && hasMore) {
-          loadArticles(pageRef.current + 1);
+        if (entry.isIntersecting && !loadingRef.current && hasMoreRef.current) {
+          loadArticlesRef.current?.(pageRef.current + 1);
         }
       },
       { threshold: 0.1 }
     );
     obs.observe(loaderRef.current);
     return () => obs.disconnect();
-  }, [loading, hasMore]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSelect(article: Article) {
     if (!article.isRead) {
@@ -345,7 +370,8 @@ export default function ArticleList() {
     filter.type === 'all' ? '全部文章' :
     filter.type === 'unread' ? '未读' :
     filter.type === 'starred' ? '已收藏' :
-    filter.type === 'read-later' ? '稍后阅读' : '';
+    filter.type === 'read-later' ? '稍后阅读' :
+    filter.type === 'group' ? (groups.find(g => g.id === filter.groupId)?.name ?? '分组') : '';
 
   const hasAiFilter = minScore > 0 || selectedTags.length > 0;
 
@@ -370,7 +396,7 @@ export default function ArticleList() {
       {/* Header */}
       <div className="px-4 py-3.5 border-b border-[#DED8CF]/50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-baseline gap-2 min-w-0">
             <h2 className="font-heading font-semibold text-sm text-[#2C2C24] flex-shrink-0">{title}</h2>
             <span className="text-[11px] text-[#78786C]/60">{filter.type === 'unread' ? displayTotal : total} 篇</span>
           </div>
@@ -512,9 +538,12 @@ export default function ArticleList() {
       <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto pb-[3.5rem] lg:pb-0 transition-opacity duration-150 ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
         {articles.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-[#78786C]">
-            <div className="w-16 h-16 rounded-full bg-[#E6DCCD]/60 flex items-center justify-center">
-              <Leaf size={24} className="text-[#5D7052]/50" />
-            </div>
+<div
+  className="w-24 h-24 bg-[#E6DCCD]/60 flex items-center justify-center"
+  style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}
+>
+  <Leaf size={32} className="text-[#5D7052]/40" />
+</div>
             <p className="text-sm font-medium">暂无文章</p>
             <p className="text-xs text-[#78786C]/70">
               {hasAiFilter ? '尝试调整 AI 筛选条件' : '添加订阅源后内容将出现在这里'}

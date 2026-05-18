@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, type Article } from '../lib/api';
 import { useStore } from '../store';
 import { cn, relativeTime } from '../lib/utils';
-import { Search, Loader2, ArrowLeft } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 
 export default function SearchPage() {
   const navigate = useNavigate();
@@ -39,27 +39,21 @@ export default function SearchPage() {
 
   return (
     <div className="flex flex-col h-full bg-[#FDFCF8]">
-      {/* Header — same height as sidebar/article-list */}
-      <div className="px-4 py-3.5 border-b border-[#DED8CF]/50 flex items-center gap-2.5">
-        <button
-          onClick={() => navigate(-1)}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0"
-        >
-          <ArrowLeft size={15} />
-        </button>
+      {/* Header */}
+      <div className="bg-[#FEFEFA]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 px-4 py-3 flex items-center gap-2 flex-shrink-0">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
           <div className="flex-1 relative">
-            <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#78786C]/60" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78786C]/60" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索文章标题、摘要、正文…"
-              className="w-full h-7 pl-9 pr-4 rounded-full border border-[#DED8CF] bg-[#F0EBE5]/40 text-xs text-[#2C2C24] placeholder-[#78786C]/60 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
+              placeholder="搜索标题、摘要、正文…"
+              className="w-full h-7 pl-8 pr-3 rounded-full border border-[#DED8CF] bg-[#F0EBE5]/40 text-xs text-[#2C2C24] placeholder-[#78786C]/60 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
               autoFocus
             />
           </div>
-          <button type="submit" className="h-7 px-4 rounded-full bg-[#5D7052] text-[#F3F4F1] text-xs font-semibold transition-all duration-200 hover:shadow-[0_4px_12px_-2px_rgba(93,112,82,0.3)] active:scale-95 flex-shrink-0">
+          <button type="submit" className="h-7 px-3.5 rounded-full bg-[#5D7052] text-[#F3F4F1] text-xs font-semibold transition-all duration-200 hover:bg-[#4A5E42] active:scale-95 flex-shrink-0">
             搜索
           </button>
         </form>

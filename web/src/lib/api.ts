@@ -28,6 +28,7 @@ export interface Article {
   author: string | null;
   url: string | null;
   publishedAt: string | null;
+  effectiveDate?: string | null;
   isRead: boolean;
   isStarred: boolean;
   isReadLater: boolean;

@@ -16,6 +16,7 @@ function toArticle(row: any) {
     author: row.author,
     url: row.url,
     publishedAt: row.published_at,
+    effectiveDate: row.effective_date ?? row.published_at ?? row.created_at,
     isRead: Boolean(row.is_read),
     isStarred: Boolean(row.is_starred),
     isReadLater: Boolean(row.is_read_later),
@@ -40,11 +41,13 @@ export async function articleRoutes(app: FastifyInstance) {
       isReadLater?: string;
       minScore?: string;
       tags?: string;
+      before?: string; // 游标：加载此时间戳之前的文章，用于防止翻页时因已读状态变化导致的 OFFSET 偏移问题
     };
   }>('/api/articles', async (req) => {
     const page = Math.max(1, parseInt(req.query.page || '1'));
     const limit = Math.min(100, parseInt(req.query.limit || '30'));
-    const offset = (page - 1) * limit;
+    // 使用游标（before）时 offset 固定为 0，游标本身已确定查询起点
+    const offset = req.query.before ? 0 : (page - 1) * limit;
 
     let where = '1=1';
     const params: any[] = [];
@@ -80,6 +83,12 @@ export async function articleRoutes(app: FastifyInstance) {
         where += " AND (',' || a.ai_tags || ',') LIKE ?";
         params.push(`%,${tag},%`);
       }
+    }
+    // 游标分页：当翻页时传入 before 参数，只查询比该时间戳更早的文章
+    // 这样即使前几页有文章状态变化（如标为已读），后续分页也不会因 OFFSET 偏移而丢失文章
+    if (req.query.before) {
+      where += ' AND a.effective_date < ?';
+      params.push(req.query.before);
     }
 
     const rows = sqlite
