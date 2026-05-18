@@ -40,7 +40,7 @@ export default function SearchPage() {
   return (
     <div className="flex flex-col h-full bg-[#FDFCF8]">
       {/* Header */}
-      <div className="bg-[#FEFEFA]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 px-4 py-3 flex items-center gap-2 flex-shrink-0">
+      <div className="bg-[#FEFEFA]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
           <div className="flex-1 relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78786C]/60" />
@@ -49,32 +49,32 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索标题、摘要、正文…"
-              className="w-full h-7 pl-8 pr-3 rounded-full border border-[#DED8CF] bg-[#F0EBE5]/40 text-xs text-[#2C2C24] placeholder-[#78786C]/60 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
+              className="w-full h-8 pl-8 pr-3 rounded-full border border-[#DED8CF] bg-[#F0EBE5]/40 text-xs text-[#2C2C24] placeholder-[#78786C]/60 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
               autoFocus
             />
           </div>
-          <button type="submit" className="h-7 px-3.5 rounded-full bg-[#5D7052] text-[#F3F4F1] text-xs font-semibold transition-all duration-200 hover:bg-[#4A5E42] active:scale-95 flex-shrink-0">
+          <button type="submit" className="h-8 px-3.5 rounded-full bg-[#5D7052] text-[#F3F4F1] text-xs font-semibold transition-all duration-200 hover:bg-[#4A5E42] active:scale-95 flex-shrink-0">
             搜索
           </button>
         </form>
       </div>
 
       {/* Filters */}
-      <div className="px-4 py-2 border-b border-[#DED8CF]/30 flex flex-wrap items-center gap-2">
+      <div className="px-4 py-2 border-b border-[#DED8CF]/30 flex flex-col gap-2">
         <select
           value={feedId}
           onChange={(e) => setFeedId(e.target.value)}
-          className="select-field h-7 text-xs px-3"
+          className="select-field h-7 text-xs px-3 w-full"
         >
           <option value="">全部订阅源</option>
           {feeds.map((f) => (
             <option key={f.id} value={f.id}>{f.title}</option>
           ))}
         </select>
-        <div className="flex items-center gap-1.5">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="select-field h-7 text-xs px-3" />
-          <span className="text-[#C8C4BB] text-xs">—</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="select-field h-7 text-xs px-3" />
+        <div className="flex items-center gap-1.5 w-full">
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="select-field h-7 text-xs px-3 flex-1" />
+          <span className="text-[#C8C4BB] text-xs flex-shrink-0">—</span>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="select-field h-7 text-xs px-3 flex-1" />
         </div>
       </div>
 
@@ -134,7 +134,7 @@ export default function SearchPage() {
         )}
 
         {!searched && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-[#78786C]">
+          <div className="flex flex-col items-center justify-center h-full min-h-[20rem] gap-4 text-[#78786C]">
             <div
               className="w-24 h-24 bg-[#E6DCCD]/50 flex items-center justify-center"
               style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}

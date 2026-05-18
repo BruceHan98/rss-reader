@@ -30,7 +30,7 @@ const READER_STYLES = `
   .article-body h1 { font-size: 1.6rem; }
   .article-body h2 { font-size: 1.35rem; }
   .article-body h3 { font-size: 1.15rem; }
-  .article-body p { margin-bottom: 1.2em; text-indent: 2em; }
+  .article-body p { margin-bottom: 1.2em; text-indent: 2em; text-align: justify; }
   .article-body p:has(> img:only-child),
   .article-body p:has(> a > img:only-child) { text-indent: 0; }
   .article-body pre p, .article-body code p { text-indent: 0; }

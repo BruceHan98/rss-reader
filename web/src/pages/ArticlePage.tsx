@@ -16,7 +16,10 @@ export default function ArticlePage() {
     <ArticleReader
       articleId={id}
       onBack={() => navigate(-1)}
-      onRead={(articleId, feedId) => markArticleRead(articleId, true, feedId).catch(() => {})}
+      onRead={(articleId, feedId) => {
+        markArticleRead(articleId, true, feedId).catch(() => {});
+        window.dispatchEvent(new CustomEvent('article-read', { detail: { articleId } }));
+      }}
     />
   );
 }

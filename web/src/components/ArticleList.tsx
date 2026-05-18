@@ -90,6 +90,16 @@ export default function ArticleList() {
     api.getAiTags().then((r) => setAllTags(r.tags)).catch(() => {});
   }, []);
 
+  // 监听文章被阅读事件，更新本地列表 isRead 状态（保持未读条显示直到真正阅读）
+  useEffect(() => {
+    function onArticleRead(e: Event) {
+      const { articleId } = (e as CustomEvent).detail;
+      setArticles((prev) => prev.map((a) => a.id === articleId ? { ...a, isRead: true } : a));
+    }
+    window.addEventListener('article-read', onArticleRead);
+    return () => window.removeEventListener('article-read', onArticleRead);
+  }, []);
+
   // Independent AI job completion polling.
   // After ai-job-started, poll every 2s until done, then refresh article list and tags.
   const aiPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -293,13 +303,12 @@ export default function ArticleList() {
 
   async function handleSelect(article: Article) {
     if (!article.isRead) {
-      // 乐观更新本地列表显示（isRead + 计数），实际标记由 ArticleReader.onRead 负责
-      setArticles((prev) =>
-        prev.map((a) => (a.id === article.id ? { ...a, isRead: true } : a))
-      );
       if (filter.type === 'unread') decDisplayTotal();
-      // 直接发请求，不经过 markArticleRead（避免与 ArticlePage.onRead 重复更新 store unreadCount）
-      api.markRead(article.id).catch(() => {});
+      // 先标记后端已读，同时 dispatch 事件让列表更新 isRead（保证列表状态与后端一致）
+      // 不做同步乐观更新，由 article-read 事件回调异步更新，视觉上保留未读条直到事件触发
+      api.markRead(article.id).then(() => {
+        window.dispatchEvent(new CustomEvent('article-read', { detail: { articleId: article.id } }));
+      }).catch(() => {});
     }
 
     setSelectedArticle(article.id);
@@ -535,36 +544,37 @@ export default function ArticleList() {
       </div>
 
       {/* List */}
-      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto pb-[3.5rem] lg:pb-0 transition-opacity duration-150 ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
-        {articles.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-[#78786C]">
-<div
-  className="w-24 h-24 bg-[#E6DCCD]/60 flex items-center justify-center"
-  style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}
->
-  <Leaf size={32} className="text-[#5D7052]/40" />
-</div>
+      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
+        {articles.length === 0 && !loading ? (
+          <div className="flex flex-col items-center justify-center h-full pb-[3.5rem] lg:pb-0 gap-3 text-[#78786C]">
+            <div
+              className="w-24 h-24 bg-[#E6DCCD]/60 flex items-center justify-center"
+              style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}
+            >
+              <Leaf size={32} className="text-[#5D7052]/40" />
+            </div>
             <p className="text-sm font-medium">暂无文章</p>
             <p className="text-xs text-[#78786C]/70">
               {hasAiFilter ? '尝试调整 AI 筛选条件' : '添加订阅源后内容将出现在这里'}
             </p>
           </div>
+        ) : (
+          <>
+            <div className="px-2.5 pt-2.5 pb-[3.5rem] lg:pb-2.5 space-y-1.5">
+              {articles.map((article) => (
+                <ArticleItem
+                  key={article.id}
+                  article={article}
+                  selected={selectedArticleId === article.id}
+                  onSelect={() => handleSelect(article)}
+                />
+              ))}
+            </div>
+            <div ref={loaderRef} className="py-4 flex justify-center">
+              {loading && <Loader2 size={18} className="animate-spin text-[#5D7052]/50" />}
+            </div>
+          </>
         )}
-
-        <div className="p-2.5 pb-1 space-y-1.5">
-          {articles.map((article) => (
-            <ArticleItem
-              key={article.id}
-              article={article}
-              selected={selectedArticleId === article.id}
-              onSelect={() => handleSelect(article)}
-            />
-          ))}
-        </div>
-
-        <div ref={loaderRef} className="py-4 pb-4 lg:pb-4 flex justify-center">
-          {loading && <Loader2 size={18} className="animate-spin text-[#5D7052]/50" />}
-        </div>
       </div>
           {/* Toast */}
       {toast && (
@@ -612,7 +622,7 @@ ArticleItem({
               'bg-[#FEFEFA] border-[#DED8CF]/40',
               'hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.1)] hover:border-[#DED8CF]/70',
               !article.isRead && 'border-l-2 border-l-[#5D7052]/50',
-            ]
+            ],
       )}
     >
       {/* Unread dot */}
