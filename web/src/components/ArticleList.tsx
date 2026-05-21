@@ -331,10 +331,7 @@ export default function ArticleList() {
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
   // isFetchingRef: 追踪是否正在加载（包括 silent 模式），防止并发请求
-  // 不用 loading state 是因为 silent 模式不更新 loading state
   const isFetchingRef = useRef(false);
-  const loadingRef = useRef(loading);
-  useEffect(() => { loadingRef.current = loading; }, [loading]);
   const hasMoreRef = useRef(hasMore);
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
 
@@ -344,33 +341,33 @@ export default function ArticleList() {
     loadArticlesRef.current?.(pageRef.current + 1);
   }
 
+  // 是否有文章（决定 loader div 是否在 DOM 中）
+  const hasArticles = articles.length > 0;
+
+  // IntersectionObserver：以 scrollContainer 为 root，正确检测 loader 是否滚动进入可视区域
+  // 依赖 hasArticles：文章列表从空变为非空时，loader div 才出现在 DOM 中，此时重建 Observer
   useEffect(() => {
-    if (!loaderRef.current) return;
+    const container = scrollContainerRef.current;
+    const loader = loaderRef.current;
+    if (!container || !loader) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) tryLoadMore();
       },
-      { threshold: 0.1 }
+      { root: container, threshold: 0 }
     );
-    obs.observe(loaderRef.current);
+    obs.observe(loader);
     return () => obs.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasArticles]);
 
-  // 每次加载完成后，检查 loader 是否仍在视口内，有则继续加载
-  // 这是对 IntersectionObserver 的补充：当 loader 始终可见时 Observer 不会重新触发
+  // 每次加载完成（loading 变 false）且还有更多时，主动尝试加载下一页
+  // 处理 loader 始终在视口内、Observer 不再重新触发的场景
   useEffect(() => {
     if (loading || !hasMore) return;
-    const loader = loaderRef.current;
-    if (!loader) return;
-    const containerEl = scrollContainerRef.current;
-    const containerBottom = containerEl ? containerEl.getBoundingClientRect().bottom : window.innerHeight;
-    const rect = loader.getBoundingClientRect();
-    if (rect.top < containerBottom && rect.bottom > 0) {
-      tryLoadMore();
-    }
+    tryLoadMore();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, hasMore]);
+  }, [loading]);
 
   async function handleSelect(article: Article) {
     if (!article.isRead) {
