@@ -26,18 +26,11 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
-        // index.html 使用 StaleWhileRevalidate：立即返回缓存（消除白屏），后台静默更新
-        // 相比 NetworkFirst(timeout=3s)，冷启动不再等待网络，下次打开即用最新版本
-        runtimeCaching: [
-          {
-            urlPattern: ({ request }) => request.destination === "document",
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "html-cache",
-            },
-          },
-        ],
+        // 只预缓存带 hash 的静态资源（JS/CSS/图片），不预缓存 index.html
+        // index.html 由 nginx 的 no-cache 头控制，SW 不干预，确保每次都能拿到最新 HTML
+        globPatterns: ["**/*.{js,css,ico,png,svg}"],
+        // 导航请求（HTML）始终走网络，保证 index.html 版本是最新的
+        navigateFallback: null,
       },
     }),
   ],
