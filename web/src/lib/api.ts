@@ -98,18 +98,28 @@ export function invalidateArticleCache(id: string) {
   articleDetailCache.delete(id);
 }
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
+// 携带 HTTP 状态码的错误类，让调用方可精确判断是否为 401
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function request<T>(url: string, options?: RequestInit & { skipUnauthorized?: boolean }): Promise<T> {
   const headers: Record<string, string> = { ...options?.headers as Record<string, string> };
   if (options?.body) headers['Content-Type'] = 'application/json';
-  const res = await fetch(BASE + url, { ...options, headers, credentials: 'include' });
+  const { skipUnauthorized, ...fetchOptions } = options ?? {};
+  const res = await fetch(BASE + url, { ...fetchOptions, headers, credentials: 'include' });
   if (res.status === 401) {
-    onUnauthorized?.();
     const err = await res.json().catch(() => ({ error: '未登录' }));
-    throw new Error(err.error || '未登录');
+    // skipUnauthorized=true 时（如 /auth/me 初始检查）不触发全局跳转，让调用方自行处理
+    if (!skipUnauthorized) onUnauthorized?.();
+    throw new ApiError(401, err.error || '未登录');
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || res.statusText);
+    throw new ApiError(res.status, err.error || res.statusText);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -220,7 +230,7 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
-  me: () => request<{ userId: string; username: string }>('/auth/me'),
+  me: () => request<{ userId: string; username: string }>('/auth/me', { skipUnauthorized: true }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ ok: boolean }>('/auth/password', {
       method: 'PUT',

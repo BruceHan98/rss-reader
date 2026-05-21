@@ -38,9 +38,9 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCF8]">
+    <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
       {/* Header */}
-      <div className="bg-[#FEFEFA]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
+      <div className="bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
           <div className="flex-1 relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78786C]/60" />
@@ -49,7 +49,7 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索标题、摘要、正文…"
-              className="w-full h-8 pl-8 pr-3 rounded-full border border-[#DED8CF] bg-[#F0EBE5]/40 text-xs text-[#2C2C24] placeholder-[#78786C]/60 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
+              className="w-full h-8 pl-8 pr-3 rounded-full border border-[#DED8CF] dark:border-[#3A3830] bg-[#F0EBE5]/40 dark:bg-[#232320] text-xs text-[#2C2C24] dark:text-[#E8E6DF] placeholder-[#78786C]/60 dark:placeholder-[#5A5850] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
               autoFocus
             />
           </div>
@@ -60,7 +60,7 @@ export default function SearchPage() {
       </div>
 
       {/* Filters */}
-      <div className="px-4 py-2 border-b border-[#DED8CF]/30 flex flex-col gap-2">
+      <div className="px-4 py-2 border-b border-[#DED8CF]/30 dark:border-[#3A3830]/40 flex flex-col gap-2">
         <select
           value={feedId}
           onChange={(e) => setFeedId(e.target.value)}
@@ -100,32 +100,32 @@ export default function SearchPage() {
 
         {!loading && results.length > 0 && (
           <div>
-            <div className="px-5 py-2.5 border-b border-[#DED8CF]/30">
-              <span className="text-xs text-[#78786C]">找到 <strong className="text-[#5D7052]">{total}</strong> 篇文章</span>
+            <div className="px-5 py-2.5 border-b border-[#DED8CF]/30 dark:border-[#3A3830]/40">
+              <span className="text-xs text-[#78786C] dark:text-[#8A8880]">找到 <strong className="text-[#5D7052] dark:text-[#7A9A6E]">{total}</strong> 篇文章</span>
             </div>
             <div className="p-4 space-y-2">
               {results.map((article) => (
                 <div
                   key={article.id}
                   onClick={() => navigate(`/article/${article.id}`)}
-                  className="p-4 rounded-[1.25rem] border border-[#DED8CF]/40 bg-[#FEFEFA] cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(93,112,82,0.12)]"
+                  className="p-4 rounded-[1.25rem] border border-[#DED8CF]/40 dark:border-[#3A3830]/60 bg-[#FEFEFA] dark:bg-[#232320] cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-4px_rgba(93,112,82,0.12)]"
                 >
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-[11px] font-semibold text-[#5D7052]">{article.feed_title}</span>
-                    <span className="text-[11px] text-[#DED8CF] ml-auto">
+                    <span className="text-[11px] font-semibold text-[#5D7052] dark:text-[#7A9A6E]">{article.feed_title}</span>
+                    <span className="text-[11px] text-[#DED8CF] dark:text-[#3A3830] ml-auto">
                       {relativeTime(article.publishedAt)}
                     </span>
                   </div>
                   <h3
                     className={cn(
                       'text-sm font-semibold mb-1 line-clamp-2',
-                      article.isRead ? 'text-[#78786C]' : 'text-[#2C2C24]'
+                      article.isRead ? 'text-[#78786C] dark:text-[#5A5850]' : 'text-[#2C2C24] dark:text-[#E8E6DF]'
                     )}
                   >
                     {article.title}
                   </h3>
                   {article.summary && (
-                    <p className="text-xs text-[#78786C] line-clamp-2 leading-relaxed">{article.summary}</p>
+                    <p className="text-xs text-[#78786C] dark:text-[#8A8880] line-clamp-2 leading-relaxed">{article.summary}</p>
                   )}
                 </div>
               ))}
@@ -136,7 +136,7 @@ export default function SearchPage() {
         {!searched && (
           <div className="flex flex-col items-center justify-center h-full min-h-[20rem] gap-4 text-[#78786C]">
             <div
-              className="w-24 h-24 bg-[#E6DCCD]/50 flex items-center justify-center"
+              className="w-24 h-24 bg-[#E6DCCD]/50 dark:bg-[#2E2B25] flex items-center justify-center"
               style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}
             >
               <Search size={32} className="text-[#5D7052]/40" />

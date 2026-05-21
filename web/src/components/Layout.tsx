@@ -19,7 +19,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex overflow-hidden bg-[#FDFCF8]" style={{height: "100dvh"}}>
+    <div className="flex overflow-hidden bg-[#FDFCF8] dark:bg-[#1C1C18]" style={{height: "100dvh"}}>
       <AiProgressFloat />
       {sidebarOpen && (
         <div
@@ -49,32 +49,32 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         <div
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="hidden lg:block absolute inset-y-0 right-0 z-40 w-3 cursor-col-resize group"
-        >
-          <div className="absolute inset-y-0 right-0 w-0.5 bg-transparent group-hover:bg-[#5D7052]/35 transition-colors duration-150" />
-          <div className={`
+        className="hidden lg:block absolute inset-y-0 right-0 z-40 w-3 cursor-col-resize group"
+      >
+        <div className="absolute inset-y-0 right-0 w-0.5 bg-transparent group-hover:bg-[#5D7052]/35 dark:group-hover:bg-[#7A9A6E]/35 transition-colors duration-150" />
+        <div className={`
             fixed top-1/2 -translate-y-1/2 z-50
             transition-all duration-300 ease-in-out
             ${sidebarOpen ? 'left-[256px]' : 'left-[2px]'}
             flex items-center gap-1.5 pointer-events-none
           `}>
-            <div className="w-3.5 h-6 rounded-r-full bg-[#DED8CF]/0 group-hover:bg-[#5D7052]/15 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150">
-              {sidebarOpen ? <ChevronLeft size={9} className="text-[#5D7052]" /> : <ChevronRight size={9} className="text-[#5D7052]" />}
+            <div className="w-3.5 h-6 rounded-r-full bg-[#DED8CF]/0 group-hover:bg-[#5D7052]/15 dark:group-hover:bg-[#7A9A6E]/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150">
+              {sidebarOpen ? <ChevronLeft size={9} className="text-[#5D7052] dark:text-[#7A9A6E]" /> : <ChevronRight size={9} className="text-[#5D7052] dark:text-[#7A9A6E]" />}
             </div>
-            <div className="px-2 py-1 rounded-md bg-[#2C2C24]/82 text-[#F3F4F1] text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-150 select-none">
+            <div className="px-2 py-1 rounded-md bg-[#2C2C24]/82 dark:bg-[#E8E6DF]/10 text-[#F3F4F1] dark:text-[#B0ADA3] text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-150 select-none">
               {sidebarOpen ? 'collapse' : 'expand'}
             </div>
           </div>
         </div>
       </div>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#FDFCF8]">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#FDFCF8] dark:bg-[#1C1C18]">
         <div className="flex-1 overflow-hidden">{children}</div>
 
         {/* Mobile bottom Tab navigation */}
         <nav
           className={cn(
-            "lg:hidden fixed bottom-0 left-0 right-0 border-t border-[#DED8CF]/50 bg-[#FEFEFA]/95 backdrop-blur-md z-40 transition-[transform,opacity] duration-300 ease-in-out",
+            "lg:hidden fixed bottom-0 left-0 right-0 border-t border-[#DED8CF]/50 dark:border-[#3A3830]/80 bg-[#FEFEFA]/95 dark:bg-[#1C1C18]/95 backdrop-blur-md z-40 transition-[transform,opacity] duration-300 ease-in-out",
             immersiveMode ? "translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
           )}
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
@@ -125,7 +125,7 @@ function BottomTabItem({
       onClick={onClick}
       className={cn(
         'flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 active:scale-95 relative',
-        active ? 'text-[#2C2C24]' : 'text-[#A8A89C]'
+        active ? 'text-[#2C2C24] dark:text-[#E8E6DF]' : 'text-[#A8A89C] dark:text-[#5A5850]'
       )}
     >
       <span className="relative">

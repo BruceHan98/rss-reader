@@ -115,12 +115,75 @@
   .dark .article-body h2,
   .dark .article-body h3,
   .dark .article-body h4 { color: #E8E6DF; }
+  .dark .article-body a { color: #7A9A6E; text-decoration-color: rgba(122,154,110,0.4); }
   .dark .article-body pre { background: #252420; border-color: #3A3830; }
-  .dark .article-body blockquote { color: #8A8880; background: #252420/30; }
+  .dark .article-body code:not(pre code) { background: rgba(58,56,48,0.7); color: #D4A574; }
+  .dark .article-body blockquote { color: #8A8880; background: rgba(37,36,32,0.5); }
   .dark .article-body td { border-color: #3A3830; }
-  .dark .article-body th { background: #252420; border-color: #3A3830; }
+  .dark .article-body th { background: #252420; border-color: #3A3830; color: #E8E6DF; }
   .dark .article-body tr:nth-child(even) td { background: #1C1C18; }
+  .dark .article-body hr { border-color: #3A3830; }
   .dark .article-img-error { background: #272520; border-color: #353330; color: #706C64; }
+
+  /* input / select dark */
+  .dark .input-field {
+    background-color: rgba(35,35,32,0.8) !important;
+    border-color: #3A3830 !important;
+    color: #E8E6DF !important;
+  }
+  .dark .input-field::placeholder { color: #5A5850 !important; }
+  .dark .input-field:focus { border-color: rgba(122,154,110,0.5) !important; }
+  .dark .select-field {
+    background-color: rgba(35,35,32,0.8) !important;
+    border-color: #3A3830 !important;
+    color: #E8E6DF !important;
+  }
+
+  /* bg-white/60 in dark */
+  .dark [class~="bg-white/60"] { background-color: rgba(35,35,32,0.8) !important; }
+
+  /* bg-[#F5F3EE] settings page */
+  .dark [class~="bg-[#F5F3EE]"] { background-color: #1C1C18 !important; }
+
+  /* bg-[#FEFEFA]/95 layout bottom nav */
+  .dark [class~="bg-[#FEFEFA]/95"] { background-color: rgba(28,28,24,0.95) !important; }
+  /* bg-[#FEFEFA]/90 */
+  .dark [class~="bg-[#FEFEFA]/90"] { background-color: rgba(28,28,24,0.90) !important; }
+
+  /* bg-[#FDFCF8]/90 article toolbar */
+  .dark [class~="bg-[#FDFCF8]/90"] { background-color: rgba(28,28,24,0.90) !important; }
+
+  /* text-[#4A4A40] sidebar nav items (non-active) */
+  .dark [class~="text-[#4A4A40]"] { color: #B0ADA3 !important; }
+
+  /* text-[#A8A89C] bottom tab non-active */
+  .dark [class~="text-[#A8A89C]"] { color: #5A5850 !important; }
+
+  /* text-[#C8C4BB] subtle text */
+  .dark [class~="text-[#C8C4BB]"] { color: #4A4840 !important; }
+
+  /* border-l-[#5D7052]/50 article unread indicator — no change needed, already uses primary */
+
+  /* hover:bg-[#F0EDE6] sidebar cancel button */
+  .dark [class~="hover:bg-[#F0EDE6]"]:hover { background-color: #2E2B25 !important; }
+  /* hover:bg-[#EDEBE5] settings buttons */
+  .dark [class~="hover:bg-[#EDEBE5]"]:hover { background-color: #2E2B25 !important; }
+  /* bg-[#EDEBE5] */
+  .dark [class~="bg-[#EDEBE5]"] { background-color: #2E2B25 !important; }
+  /* bg-[#F0EDE6] */
+  .dark [class~="bg-[#F0EDE6]"] { background-color: #2E2B25 !important; }
+
+  /* bg-[#EDE8E0] heatmap empty cell */
+  .dark [class~="bg-[#EDE8E0]"] { background-color: #2A2824 !important; }
+
+  /* text-[#B8B3AB] heatmap empty text */
+  .dark [class~="text-[#B8B3AB]"] { color: #3E3C38 !important; }
+
+  /* border-[#C8C4BB] settings export button */
+  .dark [class~="border-[#C8C4BB]"] { border-color: #3A3830 !important; }
+
+  /* bg-[#C8C4BB] toggle off */
+  .dark [class~="bg-[#C8C4BB]"] { background-color: #3A3830 !important; }
 
   ::-webkit-scrollbar {
     width: 5px;
@@ -133,8 +196,14 @@
     background-color: #DED8CF;
     border-radius: 99px;
   }
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: #3A3830;
+  }
   ::-webkit-scrollbar-thumb:hover {
     background-color: #C18C5D;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: #5A5850;
   }
 }
 

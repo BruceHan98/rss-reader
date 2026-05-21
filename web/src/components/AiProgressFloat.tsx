@@ -116,11 +116,11 @@ export default function AiProgressFloat() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-72 bg-[#FEFEFA] border border-[#DED8CF]/60 rounded-2xl shadow-[0_12px_40px_-8px_rgba(93,112,82,0.25)] overflow-hidden">
+    <div className="fixed bottom-5 right-5 z-50 w-72 bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/60 dark:border-[#3A3830]/60 rounded-2xl shadow-[0_12px_40px_-8px_rgba(93,112,82,0.25)] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#5D7052]/8 border-b border-[#DED8CF]/40">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#5D7052]/8 dark:bg-[#7A9A6E]/8 border-b border-[#DED8CF]/40 dark:border-[#3A3830]/40">
         <Sparkles size={13} className="text-[#5D7052] flex-shrink-0 animate-pulse" />
-        <span className="flex-1 text-xs font-semibold text-[#2C2C24]">AI 分析进行中</span>
+        <span className="flex-1 text-xs font-semibold text-[#2C2C24] dark:text-[#E8E6DF]">AI 分析进行中</span>
         <button
           onClick={() => setMinimized(true)}
           className="w-5 h-5 rounded-full flex items-center justify-center text-[#78786C] hover:bg-[#5D7052]/10 hover:text-[#5D7052] transition-all duration-200"
@@ -165,9 +165,9 @@ function JobProgress({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-[#4A4A40]">{label}</span>
+        <span className="text-[11px] font-semibold text-[#4A4A40] dark:text-[#B0ADA3]">{label}</span>
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-[#78786C]">
+          <span className="text-[11px] text-[#78786C] dark:text-[#8A8880]">
             {job.processed} / {job.total}
           </span>
           <button
@@ -185,7 +185,7 @@ function JobProgress({
         </div>
       </div>
       {/* Progress bar */}
-      <div className="h-1.5 bg-[#E6DCCD]/60 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-[#E6DCCD]/60 dark:bg-[#2E2B25] rounded-full overflow-hidden">
         <div
           className="h-full bg-[#5D7052] rounded-full transition-all duration-500"
           style={{ width: `${pct}%` }}
@@ -193,7 +193,7 @@ function JobProgress({
       </div>
       {/* Current article */}
       {job.currentTitle && (
-        <p className="text-[10px] text-[#78786C]/70 truncate leading-tight">
+        <p className="text-[10px] text-[#78786C]/70 dark:text-[#5A5850] truncate leading-tight">
           {job.currentTitle}
         </p>
       )}

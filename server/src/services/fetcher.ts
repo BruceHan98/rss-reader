@@ -25,6 +25,64 @@ const parser = new Parser({
     item: [['content:encoded', 'contentEncoded'], ['description', 'description']],
   },
 });
+/**
+ * 将 HTML 内容里带有效期签名的图片 URL（如字节跳动 CDN）预下载为 base64 DataURL，
+ * 避免签名过期后图片永久无法加载。
+ * 仅处理已知的签名 CDN 域名，其他图片直接保留原 URL。
+ * 单张图片超过 500KB 时跳过（保留原 URL），避免数据库体积膨胀。
+ */
+const SIGNED_IMG_PATTERN = /\bx-expires=\d+/;
+const MAX_INLINE_IMG_BYTES = 500 * 1024; // 500KB
+
+async function inlineSignedImages(html: string): Promise<string> {
+  // 找出所有 <img src="..."> 中带签名的 URL
+  const imgSrcRe = /<img([^>]*)\bsrc="([^"]+)"([^>]*)>/gi;
+  const tasks: Array<{ full: string; url: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = imgSrcRe.exec(html)) !== null) {
+    const url = m[2];
+    if (SIGNED_IMG_PATTERN.test(url)) {
+      tasks.push({ full: m[0], url });
+    }
+  }
+  if (tasks.length === 0) return html;
+
+  // 并发下载，限制 5 个并行
+  const CONCURRENCY = 5;
+  const replacements = new Map<string, string>();
+  for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+    await Promise.all(
+      tasks.slice(i, i + CONCURRENCY).map(async ({ full, url }) => {
+        try {
+          const res = await fetch(url, {
+            headers: { 'User-Agent': BROWSER_UA },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!res.ok) return;
+          const buf = await res.arrayBuffer();
+          if (buf.byteLength > MAX_INLINE_IMG_BYTES) return; // 超大图跳过
+          const contentType = res.headers.get('content-type') || 'image/jpeg';
+          const base64 = Buffer.from(buf).toString('base64');
+          const dataUrl = `data:${contentType};base64,${base64}`;
+          // 替换 src 为 dataUrl，移除 referrerpolicy（内联图片不需要）
+          const replaced = full
+            .replace(/\bsrc="[^"]*"/, `src="${dataUrl}"`)
+            .replace(/\s*referrerpolicy="[^"]*"/, '');
+          replacements.set(full, replaced);
+        } catch {
+          // 下载失败时保留原 URL
+        }
+      })
+    );
+  }
+
+  let result = html;
+  for (const [original, replaced] of replacements) {
+    result = result.split(original).join(replaced);
+  }
+  return result;
+}
+
 /** 校验 URL 是否为公网地址，防止 SSRF 攻击 */
 export function isPublicUrl(url: string): boolean {
   try {
@@ -118,6 +176,16 @@ export async function fetchFeed(feed: Feed): Promise<{ count: number; error?: st
         .get(feed.id, guid);
       if (existing) continue;
 
+      // 二次去重：部分 RSS 源（如掘金）同一篇文章每次 guid 不同，但 url 相同
+      // 用 url 兜底去重，防止同一文章以不同 guid 重复入库
+      const articleUrl = item.link || '';
+      if (articleUrl) {
+        const existingByUrl = sqlite
+          .prepare('SELECT id FROM articles WHERE feed_id = ? AND url = ?')
+          .get(feed.id, articleUrl);
+        if (existingByUrl) continue;
+      }
+
       let content = (item as any).contentEncoded || item.content || item.description || '';
       const summary = item.contentSnippet || item.summary || '';
 
@@ -126,6 +194,9 @@ export async function fetchFeed(feed: Feed): Promise<{ count: number; error?: st
         const fullContent = await fetchFullContent(item.link);
         if (fullContent) content = fullContent;
       }
+
+      // 将带签名的图片 URL 预下载为 base64，避免签名过期后图片永久失效
+      content = await inlineSignedImages(content);
 
       await db.insert(articles).values({
         id: uuidv4(),

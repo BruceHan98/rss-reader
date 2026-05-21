@@ -14,8 +14,8 @@ const READER_STYLES = `
     color: #2C2C24;
     font-size: 1rem;
     line-height: 1.8;
-    overflow-x: hidden;
   }
+  .dark .article-body { color: #E8E6DF; }
   .article-body h1,
   .article-body h2,
   .article-body h3,
@@ -31,9 +31,12 @@ const READER_STYLES = `
   .article-body h2 { font-size: 1.35rem; }
   .article-body h3 { font-size: 1.15rem; }
   .article-body p { margin-bottom: 1.2em; text-indent: 2em; text-align: justify; }
+  .article-body blockquote p,
+  .article-body li p,
+  .article-body pre p,
+  .article-body code p,
   .article-body p:has(> img:only-child),
   .article-body p:has(> a > img:only-child) { text-indent: 0; }
-  .article-body pre p, .article-body code p { text-indent: 0; }
   .article-body a {
     color: #5D7052;
     text-decoration: underline;
@@ -94,10 +97,10 @@ flex-shrink: 0;
     border-radius: 0.4em;
     font-size: 0.875em;
   }
-  .article-body ul, .article-body ol {
-    padding-left: 1.5em;
-    margin-bottom: 1.2em;
-  }
+.article-body ul, .article-body ol {
+padding-left: 2em;
+margin-bottom: 1.2em;
+}
   .article-body li { margin-bottom: 0.4em; }
   .article-body hr {
     border: none;
@@ -128,6 +131,16 @@ flex-shrink: 0;
     border: 1px solid #DED8CF/60;
   }
   .article-body tr:nth-child(even) td { background: #FDFCF8; }
+  /* Dark mode overrides for reader */
+  .dark .article-body pre { background: #252420; border-color: #3A3830; }
+  .dark .article-body code:not(pre code) { background: rgba(58,56,48,0.7); color: #D4A574; }
+  .dark .article-body blockquote { color: #8A8880; background: rgba(37,36,32,0.5); }
+  .dark .article-body h1, .dark .article-body h2, .dark .article-body h3, .dark .article-body h4 { color: #E8E6DF; }
+  .dark .article-body a { color: #7A9A6E; }
+  .dark .article-body td { border-color: #3A3830; }
+  .dark .article-body th { background: #252420; border-color: #3A3830; color: #E8E6DF; }
+  .dark .article-body tr:nth-child(even) td { background: #1C1C18; }
+  .dark .article-body hr { border-color: #3A3830; }
 `;
 
 // Width presets: max-w class and label
@@ -285,10 +298,26 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       const img = el as HTMLImageElement;
       img.loading = 'lazy';
 
-      let src = img.getAttribute('src');
+      // 优先取懒加载属性中的真实图片地址（掘金、知乎等网站常用 data-src/data-lazy-src/data-original）
+      const lazySrc =
+        img.getAttribute('data-src') ||
+        img.getAttribute('data-lazy-src') ||
+        img.getAttribute('data-original') ||
+        img.getAttribute('data-url') ||
+        null;
+
+      let src = lazySrc || img.getAttribute('src');
       if (!src) return;
+      // Base64 占位图（懒加载占位）：本身不是真实图片，直接跳过
+      if (src.startsWith('data:')) return;
       // 已经是代理 URL，跳过（避免重复处理）
       if (src.startsWith('/api/img-proxy')) return;
+
+      // 若从 data-src 取到了真实地址，同步更新 img.src 并清除 srcset
+      if (lazySrc) {
+        img.src = lazySrc;
+        img.removeAttribute('srcset');
+      }
 
       // 相对路径（如 /_next/image?...）：补全文章来源域名，使其成为可代理的绝对 URL
       if (!src.startsWith('http://') && !src.startsWith('https://')) {
@@ -357,10 +386,10 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#FDFCF8]">
-        <div className="flex flex-col items-center gap-3 text-[#78786C]">
-          <div className="w-12 h-12 rounded-full bg-[#E6DCCD]/60 flex items-center justify-center">
-            <Loader2 size={20} className="animate-spin text-[#5D7052]" />
+      <div className="flex items-center justify-center h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
+        <div className="flex flex-col items-center gap-3 text-[#78786C] dark:text-[#8A8880]">
+          <div className="w-12 h-12 rounded-full bg-[#E6DCCD]/60 dark:bg-[#2E2B25] flex items-center justify-center">
+            <Loader2 size={20} className="animate-spin text-[#5D7052] dark:text-[#7A9A6E]" />
           </div>
           <span className="text-sm">加载中…</span>
         </div>
@@ -370,7 +399,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   if (!article) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-[#FDFCF8] gap-3 text-[#78786C]">
+      <div className="flex flex-col items-center justify-center h-full bg-[#FDFCF8] dark:bg-[#1C1C18] gap-3 text-[#78786C] dark:text-[#8A8880]">
         {loadError === 'network' ? (
           <>
             <p className="text-sm">加载失败，请检查网络连接</p>
@@ -389,7 +418,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   }
 
   const rawContent = DOMPurify.sanitize(article.content || article.summary || '', {
-    ADD_ATTR: ['target'],
+    ADD_ATTR: ['target', 'data-src', 'data-lazy-src', 'data-original', 'data-url'],
     FORBID_TAGS: ['script', 'style'],
   // Remove stray quotes after closing tags — artifact of malformed RSS HTML
   }).replace(/<\/a>"/g, '</a>').replace(/<\/a>&#34;/g, '</a>').replace(/<\/a>&quot;/g, '</a>');
@@ -410,12 +439,12 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   return (
     <div
-      className="flex flex-col h-full bg-[#FDFCF8] overflow-hidden"
+      className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18] overflow-hidden"
       onClick={(e) => { const t=e.target as HTMLElement; if (t.closest("button,a")) return; setShowWidthPicker(false); setShowFontPicker(false); if (window.innerWidth < 768) { if (!isScrolling.current) setImmersiveMode(false); } }}
     >
       {/* Toolbar: fixed on mobile, static on desktop */}
       <div className={cn(
-        "border-b border-[#DED8CF]/50 bg-[#FDFCF8]/90 dark:bg-[#1C1C18]/95 backdrop-blur-sm z-30",
+        "border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FDFCF8]/90 dark:bg-[#1C1C18]/95 backdrop-blur-sm z-30",
         "fixed top-0 left-0 right-0 transition-[transform,opacity] duration-300 ease-in-out",
         "md:static md:flex-shrink-0 md:translate-y-0 md:opacity-100",
         immersiveMode ? "-translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
@@ -600,19 +629,19 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
             )}
-            <span className="text-xs font-semibold text-[#5D7052]">{article.feed_title}</span>
+            <span className="text-xs font-semibold text-[#5D7052] dark:text-[#7A9A6E]">{article.feed_title}</span>
             {article.author && (
               <>
-                <span className="text-[#DED8CF]">·</span>
-                <span className="text-xs text-[#78786C]">{article.author}</span>
+                <span className="text-[#DED8CF] dark:text-[#3A3830]">·</span>
+                <span className="text-xs text-[#78786C] dark:text-[#8A8880]">{article.author}</span>
               </>
             )}
-            <span className="text-[#DED8CF]">·</span>
-            <span className="text-xs text-[#78786C]">{formatDate(article.publishedAt)}</span>
+            <span className="text-[#DED8CF] dark:text-[#3A3830]">·</span>
+            <span className="text-xs text-[#78786C] dark:text-[#8A8880]">{formatDate(article.publishedAt)}</span>
           </div>
 
           {/* Title */}
-          <h1 className="font-heading font-bold text-2xl leading-snug mb-4 text-[#2C2C24]">
+          <h1 className="font-heading font-bold text-2xl leading-snug mb-4 text-[#2C2C24] dark:text-[#E8E6DF]">
             {article.title}
           </h1>
 
@@ -635,7 +664,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
               {article.aiTags?.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E6DCCD]/70 text-[#78786C] text-xs font-medium"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E6DCCD]/70 dark:bg-[#2E2B25] text-[#78786C] dark:text-[#8A8880] text-xs font-medium"
                 >
                   <Tag size={9} />
                   {tag}
@@ -660,10 +689,10 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
             />
           ) : (
             <div className="text-center py-14">
-              <div className="w-20 h-20 rounded-[40%_60%_60%_40%_/_40%_40%_60%_60%] bg-[#E6DCCD]/60 mx-auto mb-5 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-[40%_60%_60%_40%_/_40%_40%_60%_60%] bg-[#E6DCCD]/60 dark:bg-[#2E2B25] mx-auto mb-5 flex items-center justify-center">
                 <ExternalLink size={24} className="text-[#5D7052]/60" />
               </div>
-              <p className="text-[#78786C] mb-5 text-sm">此订阅源未提供完整内容</p>
+              <p className="text-[#78786C] dark:text-[#8A8880] mb-5 text-sm">此订阅源未提供完整内容</p>
               {article.url && (
                 <a
                   href={article.url}

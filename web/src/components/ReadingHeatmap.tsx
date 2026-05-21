@@ -12,11 +12,11 @@ function getLevel(count: number): 0 | 1 | 2 | 3 | 4 {
 }
 
 const LEVEL_CLASSES: Record<0 | 1 | 2 | 3 | 4, string> = {
-  0: 'bg-[#EDE8E0] text-[#B8B3AB]',
-  1: 'bg-[#B8CEAE] text-[#5D7052]',
-  2: 'bg-[#8FB082] text-white',
-  3: 'bg-[#6B9461] text-white',
-  4: 'bg-[#4A7040] text-white',
+  0: 'bg-[#EDE8E0] dark:bg-[#2A2824] text-[#B8B3AB] dark:text-[#3E3C38]',
+  1: 'bg-[#B8CEAE] dark:bg-[#3A5535] text-[#5D7052] dark:text-[#A8C4A0]',
+  2: 'bg-[#8FB082] dark:bg-[#4A6B44] text-white',
+  3: 'bg-[#6B9461] dark:bg-[#5A7E54] text-white',
+  4: 'bg-[#4A7040] dark:bg-[#6B9461] text-white',
 };
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -83,7 +83,7 @@ export default function ReadingHeatmap() {
             {year}年 {MONTHS[month]}
           </span>
           {monthTotal > 0 && (
-            <span className="text-xs text-[#78786C] bg-[#E6DCCD]/60 px-2 py-0.5 rounded-full">
+            <span className="text-xs text-[#78786C] dark:text-[#8A8880] bg-[#E6DCCD]/60 dark:bg-[#2E2B25] px-2 py-0.5 rounded-full">
               共 {monthTotal} 篇
             </span>
           )}
@@ -127,7 +127,7 @@ export default function ReadingHeatmap() {
                       className={[
                         'aspect-square rounded-md flex items-center justify-center text-[10px] font-semibold transition-all duration-150',
                         LEVEL_CLASSES[level],
-                        isToday ? 'ring-2 ring-[#5D7052] ring-offset-1' : '',
+                        isToday ? 'ring-2 ring-[#5D7052] dark:ring-[#7A9A6E] ring-offset-1 dark:ring-offset-[#232320]' : '',
                       ].join(' ')}
                       title={count > 0 ? `${cell.dateStr}：阅读 ${count} 篇` : cell.dateStr}
                     >

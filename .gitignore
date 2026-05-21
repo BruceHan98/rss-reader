@@ -28,3 +28,6 @@ Thumbs.db
 # Runtime data (database, secrets, uploads)
 data/
 server/data/
+
+# Test files
+*.opml

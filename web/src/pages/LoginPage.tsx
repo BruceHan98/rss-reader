@@ -37,7 +37,7 @@ export default function LoginPage({ onLogin }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFCF8] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#FDFCF8] dark:bg-[#1C1C18] flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 mb-8">
@@ -45,15 +45,15 @@ export default function LoginPage({ onLogin }: Props) {
             <Rss size={22} className="text-[#F3F4F1]" />
           </div>
           <div className="text-center">
-            <h1 className="font-heading font-bold text-xl text-[#2C2C24] tracking-tight">RSS Reader</h1>
-            <p className="text-sm text-[#78786C] mt-1">请登录以继续</p>
+            <h1 className="font-heading font-bold text-xl text-[#2C2C24] dark:text-[#E8E6DF] tracking-tight">RSS Reader</h1>
+            <p className="text-sm text-[#78786C] dark:text-[#8A8880] mt-1">请登录以继续</p>
           </div>
         </div>
 
         {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="bg-[#FEFEFA] border border-[#DED8CF]/50 rounded-3xl p-7 shadow-[0_4px_24px_-4px_rgba(44,44,36,0.08)] space-y-4"
+          className="bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/50 dark:border-[#3A3830]/60 rounded-3xl p-7 shadow-[0_4px_24px_-4px_rgba(44,44,36,0.08)] space-y-4"
         >
           {error && (
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#A85448]/8 border border-[#A85448]/20 text-[#A85448] text-sm">
@@ -63,7 +63,7 @@ export default function LoginPage({ onLogin }: Props) {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[#78786C] uppercase tracking-wider">用户名</label>
+            <label className="text-xs font-medium text-[#78786C] dark:text-[#5A5850] uppercase tracking-wider">用户名</label>
             <input
               type="text"
               value={username}
@@ -75,7 +75,7 @@ export default function LoginPage({ onLogin }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[#78786C] uppercase tracking-wider">密码</label>
+            <label className="text-xs font-medium text-[#78786C] dark:text-[#5A5850] uppercase tracking-wider">密码</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -105,7 +105,7 @@ export default function LoginPage({ onLogin }: Props) {
           </button>
         </form>
 
-        <p className="text-center text-[11px] text-[#78786C]/50 mt-6">
+        <p className="text-center text-[11px] text-[#78786C]/50 dark:text-[#5A5850]/50 mt-6">
           首次启动时密码已打印在服务端日志中
         </p>
       </div>

@@ -8,7 +8,7 @@ import ArticlePage from './pages/ArticlePage';
 import SearchPage from './pages/SearchPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
-import { api, setUnauthorizedHandler } from './lib/api';
+import { setUnauthorizedHandler, ApiError } from './lib/api';
 
 type AuthState = 'checking' | 'logged-in' | 'logged-out';
 
@@ -29,42 +29,63 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 带重试的认证检查：区分真正的401（未登录）和瞬时网络错误
-    // 只有明确收到401才视为未登录，其他错误最多重试2次
+    // 认证检查策略：
+    // - 收到 401（ApiError.status === 401）= 确实未登录，立即跳转
+    // - 网络错误 / 其他非 401 错误 = 瞬时抖动，最多重试 2 次（间隔 800ms），每次带 5s 超时
+    // - 重试耗尽仍失败 = 保守处理：保持 checked 状态，再等 2s 最后尝试一次
+    // - 任何阶段超出 10s 总时限，强制进入已登录界面（宁可多请求一次 API 也不白屏）
     let cancelled = false;
-    async function checkAuth(retries = 2) {
+
+    async function tryMe(timeoutMs = 5000): Promise<{ userId: string; username: string }> {
+      // 使用 AbortSignal.timeout 为请求加超时，防止服务器 hang 住导致无限白屏
+      const signal = AbortSignal.timeout(timeoutMs);
+      const user = await fetch('/api/auth/me', { credentials: 'include', signal })
+        .then(async (res) => {
+          if (res.status === 401) {
+            const body = await res.json().catch(() => ({ error: '未登录' }));
+            throw new ApiError(401, body.error || '未登录');
+          }
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json() as Promise<{ userId: string; username: string }>;
+        });
+      return user;
+    }
+
+    async function checkAuth(retries = 2): Promise<void> {
       try {
-        const user = await api.me();
+        const user = await tryMe(5000);
         if (cancelled) return;
         setUsername(user.username);
         setAuthState('logged-in');
       } catch (err: any) {
         if (cancelled) return;
-        // 401 = 确实未登录，直接跳转
-        if (err.message === '未登录' || err.message === '未登录或登录已过期') {
+        // 明确的 401：真的未登录，不重试
+        if (err instanceof ApiError && err.status === 401) {
           setAuthState('logged-out');
           return;
         }
-        // 其他错误（网络抖动等），重试
+        // 网络错误或超时：重试
         if (retries > 0) {
           await new Promise((r) => setTimeout(r, 800));
+          if (cancelled) return;
           return checkAuth(retries - 1);
         }
-        // 重试耗尽仍失败，避免误判为未登录，保持checking状态再等一轮
-        // 再给一次较长延迟的机会
+        // 重试耗尽：最后一次机会，等 2s 后再试
         await new Promise((r) => setTimeout(r, 2000));
         if (cancelled) return;
         try {
-          const user = await api.me();
+          const user = await tryMe(5000);
           if (cancelled) return;
           setUsername(user.username);
           setAuthState('logged-in');
         } catch (finalErr: any) {
           if (cancelled) return;
+          // 最终仍失败：若是 401 则跳登录，否则网络问题，也跳登录让用户手动重试
           setAuthState('logged-out');
         }
       }
     }
+
     checkAuth();
     return () => { cancelled = true; };
   }, []);
@@ -77,7 +98,14 @@ export default function App() {
     }
   }, [authState]);
 
-  if (authState === 'checking') return null;
+  if (authState === 'checking') return (
+    <div className="min-h-screen bg-[#FDFCF8] dark:bg-[#1C1C18] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 animate-pulse">
+        <div className="w-12 h-12 rounded-2xl bg-[#5D7052]/20" />
+        <div className="w-24 h-3 rounded-full bg-[#DED8CF]" />
+      </div>
+    </div>
+  );
 
   if (authState === 'logged-out') {
     return (

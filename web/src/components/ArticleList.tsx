@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, type Article, type AiTag } from '../lib/api';
 import { cn, relativeTime } from '../lib/utils';
-import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Menu, Rss, CheckCircle, AlertCircle } from 'lucide-react';
+import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Menu, Rss, CheckCircle, AlertCircle, CircleDot } from 'lucide-react';
 import FeedIcon from './FeedIcon';
 
 const PAGE_SIZE = 30;
@@ -23,6 +23,11 @@ export default function ArticleList() {
 
   // 「滚动自动已读」是否开启
   const markReadOnScroll = settings?.markReadOnScroll === 'true';
+
+  // Unread-only filter (available for feed/group)
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const showUnreadOnlyRef = useRef(showUnreadOnly);
+  useEffect(() => { showUnreadOnlyRef.current = showUnreadOnly; }, [showUnreadOnly]);
 
   // AI filter state
   const [minScore, setMinScore] = useState(0);
@@ -62,17 +67,19 @@ export default function ArticleList() {
   const articlesRef = useRef(articles);
   useEffect(() => { articlesRef.current = articles; }, [articles]);
 
-  // 游标：记录当前列表最后一篇文章的 publishedAt，翻页时作为 before 参数传给服务端
+  // 游标：记录当前列表最后一篇文章的 effectiveDate 和 id，翻页时作为 before/beforeId 参数传给服务端
   // 防止未读列表在用户阅读文章后，OFFSET 偏移导致后续页面文章丢失
-  const cursorRef = useRef<string | null>(null);
+  // 联合游标可解决同时间戳多篇文章被跳过的问题
+  const cursorRef = useRef<{ date: string; id: string } | null>(null);
 
   // 各 filter key 对应的 displayTotal 缓存，切换 tab 时先显示缓存值
   const displayTotalCacheRef = useRef<Map<string, number>>(new Map());
   // 各 filter key 对应的第一页文章列表缓存，切换 tab 时先显示缓存，后台静默刷新
   const articleListCacheRef = useRef<Map<string, Article[]>>(new Map());
-  function getFilterKey(f: typeof filter): string {
-    if (f.type === 'feed') return `feed:${f.feedId}`;
-    if (f.type === 'group') return `group:${f.groupId}`;
+  function getFilterKey(f: typeof filter, unreadOnly?: boolean): string {
+    const u = unreadOnly ?? showUnreadOnlyRef.current;
+    if (f.type === 'feed') return `feed:${f.feedId}${u ? ':unread' : ''}`;
+    if (f.type === 'group') return `group:${f.groupId}${u ? ':unread' : ''}`;
     return f.type;
   }
   // 减少 displayTotal 并同步到缓存
@@ -142,6 +149,7 @@ export default function ArticleList() {
     }
     const signal = reset ? abortControllerRef.current!.signal : undefined;
 
+    isFetchingRef.current = true;
     if (!silent) setLoading(true);
     try {
       const params: Record<string, string | number | undefined> = {
@@ -151,15 +159,18 @@ export default function ArticleList() {
       if (filter.type === 'feed') params.feedId = filter.feedId;
       if (filter.type === 'group') params.groupId = filter.groupId;
       if (filter.type === 'unread') params.isRead = 'false';
+      if ((filter.type === 'feed' || filter.type === 'group') && showUnreadOnlyRef.current) params.isRead = 'false';
       if (filter.type === 'starred') params.isStarred = 'true';
       if (filter.type === 'read-later') params.isReadLater = 'true';
 
       if (minScoreRef.current > 0) params.minScore = minScoreRef.current;
       if (selectedTagsRef.current.length > 0) params.tags = selectedTagsRef.current.join(',');
 
-      // 翻页时使用游标（before）替代纯 OFFSET 分页，防止已读状态变化导致文章被跳过
+      // 翻页时使用联合游标（before + beforeId）替代纯 OFFSET 分页
+      // 防止已读状态变化导致文章被跳过，同时解决同时间戳文章丢失问题
       if (!reset && p > 1 && cursorRef.current) {
-        params.before = cursorRef.current;
+        params.before = cursorRef.current.date;
+        params.beforeId = cursorRef.current.id;
         // 游标模式下服务端 offset=0，前端仍用 page 字段记录逻辑页码（但不影响服务端查询）
       }
 
@@ -167,34 +178,54 @@ export default function ArticleList() {
       setTotal(data.total);
       if (reset) {
         setDisplayTotal(data.total);
-        displayTotalCacheRef.current.set(getFilterKey(filter), data.total);
-        // 缓存第一页结果，供下次切回该 tab 时立即展示
-        if (p === 1) articleListCacheRef.current.set(getFilterKey(filter), data.articles);
-        // 重置游标，记录第一页最后一篇文章的排序时间（effectiveDate = published_at ?? created_at）
+        // 动态列表（未读/收藏/稍后阅读）不缓存，避免切换时显示旧数据
+        const isDynamic = filter.type === 'unread' || filter.type === 'starred' || filter.type === 'read-later';
+        if (!isDynamic) {
+          displayTotalCacheRef.current.set(getFilterKey(filter), data.total);
+        }
+        // 仅对 feed/group/all 缓存第一页结果
+        if (p === 1 && !isDynamic) articleListCacheRef.current.set(getFilterKey(filter), data.articles);
+        // 重置游标，记录第一页最后一篇文章的 effectiveDate 和 id（联合游标）
         const lastArticle = data.articles[data.articles.length - 1];
-        cursorRef.current = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? null;
+        const lastDate = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? null;
+        cursorRef.current = lastArticle && lastDate ? { date: lastDate, id: lastArticle.id } : null;
       } else if (data.articles.length > 0) {
-        // 翻页后更新游标为当前已加载列表的最后一篇文章时间
+        // 翻页后更新游标为当前批次最后一篇文章（联合游标）
         const lastArticle = data.articles[data.articles.length - 1];
-        cursorRef.current = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? cursorRef.current;
+        const lastDate = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? null;
+        cursorRef.current = lastDate ? { date: lastDate, id: lastArticle.id } : cursorRef.current;
       }
-      setHasMore(data.articles.length === PAGE_SIZE);
+      // 计算追加后的实际已加载数量，用于判断是否还有更多
+      const prevCount = reset ? 0 : articlesRef.current.length;
+      const newLoadedCount = prevCount + data.articles.length;
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
+      // hasMore: 实际已加载数量 < 服务端当前过滤条件下的总量
+      setHasMore(newLoadedCount < data.total);
       setPage(p);
     } catch (err: any) {
       // 请求被主动取消时不更新状态（新请求正在进行中）
-      if (err?.name === 'AbortError') return;
+      if (err?.name === 'AbortError') { isFetchingRef.current = false; return; }
+      isFetchingRef.current = false;
       if (!silent) setLoading(false);
       throw err;
     }
+    isFetchingRef.current = false;
     if (!silent) setLoading(false);
   }
   // Always keep the ref pointing at the latest loadArticles (captures current filter/minScore/tags)
   loadArticlesRef.current = loadArticles;
 
+  // Reset showUnreadOnly when switching to a filter that doesn't support it
+  useEffect(() => {
+    if (filter.type !== 'feed' && filter.type !== 'group') {
+      setShowUnreadOnly(false);
+      showUnreadOnlyRef.current = false;
+    }
+  }, [filter]);
+
   // Reload when filter changes
   useEffect(() => {
-    const key = getFilterKey(filter);
+    const key = getFilterKey(filter, false);
     const cachedTotal = displayTotalCacheRef.current.get(key) ?? 0;
     const cachedArticles = articleListCacheRef.current.get(key);
 
@@ -205,18 +236,36 @@ export default function ArticleList() {
     scrollReadPendingIds.current.clear(); // 清除旧 tab 的已读记录，防止 id 污染新 tab
     scrollContainerRef.current?.scrollTo({ top: 0 });
 
-    if (cachedArticles) {
-      // 命中缓存：立即展示旧数据，后台静默刷新（不触发 loading 状态，避免闪烁）
+    // 未读/收藏/稍后阅读等动态列表不使用缓存（内容随时变化，缓存会导致数字和实际不一致）
+    const isDynamicFilter = filter.type === 'unread' || filter.type === 'starred' || filter.type === 'read-later';
+    if (cachedArticles && !showUnreadOnlyRef.current && !isDynamicFilter) {
+      // 命中缓存（仅 feed/group/all 类型）：立即展示旧数据，后台静默刷新
       setArticles(cachedArticles);
-      // 缓存数据可能已过期，先假设可能有更多内容（避免无限滚动被锁死）
-      setHasMore(cachedArticles.length === PAGE_SIZE);
+      setHasMore(cachedTotal > cachedArticles.length);
       loadArticles(1, true, true);
     } else {
-      // 无缓存：正常加载并显示 loading
+      // 动态列表或无缓存：始终重新加载，确保数据准确
+      setArticles([]);
       loadArticles(1, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  // Reload when showUnreadOnly changes
+  const isFirstUnreadOnlyRunRef = useRef(true);
+  useEffect(() => {
+    if (isFirstUnreadOnlyRunRef.current) {
+      isFirstUnreadOnlyRunRef.current = false;
+      return;
+    }
+    setTotal(0);
+    setDisplayTotal(0);
+    setHasMore(false);
+    setPage(1);
+    // 切换未读筛选后，重新加载
+    loadArticles(1, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showUnreadOnly]);
 
   // Reload when AI filters change (skip first mount run)
   const isFirstAiFilterRunRef = useRef(true);
@@ -267,7 +316,7 @@ export default function ArticleList() {
           if (!article || article.isRead) return;
           scrollReadPendingIds.current.add(id);
           setArticles((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: true } : a)));
-          if (filterRef.current.type === 'unread') decDisplayTotal();
+          if (filterRef.current.type === 'unread' || showUnreadOnlyRef.current) decDisplayTotal();
           api.markRead(id).catch(() => {});
         }
       });
@@ -281,18 +330,25 @@ export default function ArticleList() {
   // Infinite scroll
   const pageRef = useRef(page);
   useEffect(() => { pageRef.current = page; }, [page]);
+  // isFetchingRef: 追踪是否正在加载（包括 silent 模式），防止并发请求
+  // 不用 loading state 是因为 silent 模式不更新 loading state
+  const isFetchingRef = useRef(false);
   const loadingRef = useRef(loading);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
   const hasMoreRef = useRef(hasMore);
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
 
+  // tryLoadMore: 统一的「尝试加载下一页」入口，自带防重入保护
+  function tryLoadMore() {
+    if (isFetchingRef.current || !hasMoreRef.current) return;
+    loadArticlesRef.current?.(pageRef.current + 1);
+  }
+
   useEffect(() => {
     if (!loaderRef.current) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !loadingRef.current && hasMoreRef.current) {
-          loadArticlesRef.current?.(pageRef.current + 1);
-        }
+        if (entry.isIntersecting) tryLoadMore();
       },
       { threshold: 0.1 }
     );
@@ -301,9 +357,24 @@ export default function ArticleList() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 每次加载完成后，检查 loader 是否仍在视口内，有则继续加载
+  // 这是对 IntersectionObserver 的补充：当 loader 始终可见时 Observer 不会重新触发
+  useEffect(() => {
+    if (loading || !hasMore) return;
+    const loader = loaderRef.current;
+    if (!loader) return;
+    const containerEl = scrollContainerRef.current;
+    const containerBottom = containerEl ? containerEl.getBoundingClientRect().bottom : window.innerHeight;
+    const rect = loader.getBoundingClientRect();
+    if (rect.top < containerBottom && rect.bottom > 0) {
+      tryLoadMore();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, hasMore]);
+
   async function handleSelect(article: Article) {
     if (!article.isRead) {
-      if (filter.type === 'unread') decDisplayTotal();
+      if (filter.type === 'unread' || showUnreadOnly) decDisplayTotal();
       // 先标记后端已读，同时 dispatch 事件让列表更新 isRead（保证列表状态与后端一致）
       // 不做同步乐观更新，由 article-read 事件回调异步更新，视觉上保留未读条直到事件触发
       api.markRead(article.id).then(() => {
@@ -383,11 +454,12 @@ export default function ArticleList() {
     filter.type === 'group' ? (groups.find(g => g.id === filter.groupId)?.name ?? '分组') : '';
 
   const hasAiFilter = minScore > 0 || selectedTags.length > 0;
+  const canShowUnreadFilter = filter.type === 'feed' || filter.type === 'group';
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCF8]">
+    <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
       {/* Mobile top header */}
-      <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[#DED8CF]/50 bg-[#FEFEFA]/90 backdrop-blur-sm flex-shrink-0">
+      <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm flex-shrink-0">
         <div className="flex items-center gap-2 flex-1">
           <div className="w-6 h-6 rounded-full bg-[#5D7052] flex items-center justify-center">
             <Rss size={12} className="text-[#F3F4F1]" />
@@ -403,13 +475,28 @@ export default function ArticleList() {
       </div>
 
       {/* Header */}
-      <div className="px-4 py-3.5 border-b border-[#DED8CF]/50">
+      <div className="px-4 py-3.5 border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60">
         <div className="flex items-center justify-between">
           <div className="flex items-baseline gap-2 min-w-0">
-            <h2 className="font-heading font-semibold text-sm text-[#2C2C24] flex-shrink-0">{title}</h2>
-            <span className="text-[11px] text-[#78786C]/60">{filter.type === 'unread' ? displayTotal : total} 篇</span>
+            <h2 className="font-heading font-semibold text-sm text-[#2C2C24] dark:text-[#E8E6DF] flex-shrink-0">{title}</h2>
+            <span className="text-[11px] text-[#78786C]/60 dark:text-[#5A5850]">{(filter.type === 'unread' || showUnreadOnly) ? displayTotal : total} 篇</span>
           </div>
           <div className="flex items-center gap-1">
+            {/* Unread-only filter */}
+            {canShowUnreadFilter && (
+              <button
+                onClick={() => setShowUnreadOnly((v) => !v)}
+                className={cn(
+                  'w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 flex-shrink-0',
+                  showUnreadOnly
+                    ? 'bg-[#5D7052]/15 text-[#5D7052]'
+                    : 'text-[#78786C]/60 dark:text-[#5A5850] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
+                )}
+                title={showUnreadOnly ? '显示全部文章' : '只看未读'}
+              >
+                <CircleDot size={13} strokeWidth={showUnreadOnly ? 2.5 : 1.75} />
+              </button>
+            )}
             {/* AI filter toggle */}
             <button
               onClick={() => setShowTagFilter((v) => !v)}
@@ -465,7 +552,7 @@ export default function ArticleList() {
           <div className="mt-2.5 space-y-2.5">
             {/* Score filter */}
             <div className="flex items-center gap-2.5">
-              <span className="text-[11px] text-[#78786C] whitespace-nowrap flex-shrink-0">最低分</span>
+              <span className="text-[11px] text-[#78786C] dark:text-[#8A8880] whitespace-nowrap flex-shrink-0">最低分</span>
               <input
                 type="range"
                 min={0}
@@ -474,7 +561,7 @@ export default function ArticleList() {
                 onChange={(e) => setMinScore(Number(e.target.value))}
                 className="flex-1 h-1.5 accent-[#5D7052] cursor-pointer"
               />
-              <span className="text-[11px] font-semibold text-[#5D7052] w-5 text-right flex-shrink-0">{minScore}</span>
+              <span className="text-[11px] font-semibold text-[#5D7052] dark:text-[#7A9A6E] w-5 text-right flex-shrink-0">{minScore}</span>
               {minScore > 0 && (
                 <button
                   onClick={() => setMinScore(0)}
@@ -490,7 +577,7 @@ export default function ArticleList() {
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
                   <Tag size={10} className="text-[#78786C]/60" />
-                  <span className="text-[11px] text-[#78786C]">按标签筛选</span>
+                  <span className="text-[11px] text-[#78786C] dark:text-[#8A8880]">按标签筛选</span>
                   {selectedTags.length > 0 && (
                     <button
                       onClick={() => setSelectedTags([])}
@@ -543,8 +630,8 @@ export default function ArticleList() {
         )}
       </div>
 
-      {/* List */}
-      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
+        {/* List */}
+      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 bg-[#FDFCF8] dark:bg-[#1C1C18] ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
         {articles.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center h-full pb-[3.5rem] lg:pb-0 gap-3 text-[#78786C]">
             <div
@@ -554,7 +641,7 @@ export default function ArticleList() {
               <Leaf size={32} className="text-[#5D7052]/40" />
             </div>
             <p className="text-sm font-medium">暂无文章</p>
-            <p className="text-xs text-[#78786C]/70">
+            <p className="text-xs text-[#78786C]/70 dark:text-[#5A5850]">
               {hasAiFilter ? '尝试调整 AI 筛选条件' : '添加订阅源后内容将出现在这里'}
             </p>
           </div>
@@ -619,8 +706,8 @@ ArticleItem({
         selected
           ? 'bg-[#5D7052]/10 border-[#5D7052]/30 shadow-[0_2px_12px_-2px_rgba(93,112,82,0.18)] ring-1 ring-[#5D7052]/15'
           : [
-              'bg-[#FEFEFA] border-[#DED8CF]/40',
-              'hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.1)] hover:border-[#DED8CF]/70',
+              'bg-[#FEFEFA] dark:bg-[#232320] border-[#DED8CF]/40 dark:border-[#3A3830]/60',
+              'hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.1)] hover:border-[#DED8CF]/70 dark:hover:border-[#3A3830]',
               !article.isRead && 'border-l-2 border-l-[#5D7052]/50',
             ],
       )}
@@ -638,8 +725,8 @@ ArticleItem({
           title={article.feed_title || ''}
           className="w-3 h-3"
         />
-        <span className="text-[11px] text-[#78786C]/80 truncate font-medium">{article.feed_title}</span>
-        <span className="text-[11px] text-[#C8C4BB] ml-auto flex-shrink-0">
+        <span className="text-[11px] text-[#78786C]/80 dark:text-[#8A8880] truncate font-medium">{article.feed_title}</span>
+        <span className="text-[11px] text-[#C8C4BB] dark:text-[#4A4840] ml-auto flex-shrink-0">
           {relativeTime(article.publishedAt)}
         </span>
       </div>
@@ -649,8 +736,8 @@ ArticleItem({
         className={cn(
           'text-[15px] leading-snug mb-1 line-clamp-2',
           article.isRead
-            ? 'text-[#78786C] font-normal'
-            : 'text-[#2C2C24] font-semibold'
+            ? 'text-[#78786C] dark:text-[#5A5850] font-normal'
+            : 'text-[#2C2C24] dark:text-[#E8E6DF] font-semibold'
         )}
       >
         {article.title}
@@ -658,7 +745,7 @@ ArticleItem({
 
       {/* Summary */}
       {article.summary && (
-        <p className="text-[12px] text-[#78786C]/70 line-clamp-2 leading-relaxed mt-0.5">
+        <p className="text-[12px] text-[#78786C]/70 dark:text-[#5A5850] line-clamp-2 leading-relaxed mt-0.5">
           {article.summary}
         </p>
       )}

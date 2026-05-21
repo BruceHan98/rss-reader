@@ -27,14 +27,14 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
-        // index.html 使用网络优先策略：部署新版本后立即生效，无需用户手动清除缓存
+        // index.html 使用 StaleWhileRevalidate：立即返回缓存（消除白屏），后台静默更新
+        // 相比 NetworkFirst(timeout=3s)，冷启动不再等待网络，下次打开即用最新版本
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === "document",
-            handler: "NetworkFirst",
+            handler: "StaleWhileRevalidate",
             options: {
               cacheName: "html-cache",
-              networkTimeoutSeconds: 3,
             },
           },
         ],

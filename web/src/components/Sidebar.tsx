@@ -45,15 +45,15 @@ function ConfirmDialog({
     try { await onConfirm(); } finally { setLoading(false); }
   }
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#2C2C24]/40 backdrop-blur-sm">
-      <div className="bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/50 rounded-[2rem] shadow-[0_24px_64px_-12px_rgba(44,44,36,0.2)] w-full max-w-sm p-8">
-        <h3 className="font-heading font-semibold text-lg text-[#2C2C24] mb-3">{title}</h3>
-        <p className="text-sm text-[#78786C] leading-relaxed mb-7">{message}</p>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#2C2C24]/40 dark:bg-[#000000]/60 backdrop-blur-sm">
+      <div className="bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/50 dark:border-[#3A3830]/60 rounded-[2rem] shadow-[0_24px_64px_-12px_rgba(44,44,36,0.2)] w-full max-w-sm p-8">
+        <h3 className="font-heading font-semibold text-lg text-[#2C2C24] dark:text-[#E8E6DF] mb-3">{title}</h3>
+        <p className="text-sm text-[#78786C] dark:text-[#8A8880] leading-relaxed mb-7">{message}</p>
         <div className="flex items-center gap-3">
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 h-10 rounded-full border border-[#DED8CF] text-[#78786C] bg-transparent text-sm font-medium transition-all duration-200 hover:bg-[#F0EDE6] active:scale-95 disabled:opacity-40"
+            className="flex-1 h-10 rounded-full border border-[#DED8CF] dark:border-[#3A3830] text-[#78786C] dark:text-[#8A8880] bg-transparent text-sm font-medium transition-all duration-200 hover:bg-[#F0EDE6] dark:hover:bg-[#2E2B25] active:scale-95 disabled:opacity-40"
           >
             取消
           </button>
@@ -154,20 +154,20 @@ export default function Sidebar() {
   const groupedFeeds = (groupId: string) => feeds.filter((f) => f.groupId === groupId);
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCF8]">
+    <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
       {/* Header */}
       <div className="px-4 py-3.5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-full bg-[#5D7052] flex items-center justify-center shadow-[0_2px_8px_-1px_rgba(93,112,82,0.35)]">
             <Rss size={13} className="text-[#F3F4F1]" />
           </div>
-          <span className="font-heading font-bold text-base text-[#2C2C24] tracking-tight">
+          <span className="font-heading font-bold text-base text-[#2C2C24] dark:text-[#E8E6DF] tracking-tight">
             RSS Reader
           </span>
         </div>
       </div>
 
-      <div className="mx-4 h-px bg-[#DED8CF]/60" />
+      <div className="mx-4 h-px bg-[#DED8CF]/60 dark:bg-[#3A3830]/60" />
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2.5 space-y-0.5">
@@ -181,10 +181,10 @@ export default function Sidebar() {
           active={filter.type === 'read-later'} onClick={() => nav({ type: 'read-later' })} />
 
         <div className="pt-3 pb-1 px-2 flex items-center justify-between">
-          <span className="text-[10px] font-semibold text-[#78786C]/70 uppercase tracking-widest">订阅源</span>
+          <span className="text-[10px] font-semibold text-[#78786C]/70 dark:text-[#5A5850] uppercase tracking-widest">订阅源</span>
           <button
             onClick={() => setShowAddFeed(true)}
-            className="w-5 h-5 rounded-full bg-[#E6DCCD] flex items-center justify-center text-[#5D7052] transition-all duration-200 hover:bg-[#5D7052] hover:text-[#F3F4F1] hover:scale-110 active:scale-95"
+            className="w-5 h-5 rounded-full bg-[#E6DCCD] dark:bg-[#2E2B25] flex items-center justify-center text-[#5D7052] dark:text-[#7A9A6E] transition-all duration-200 hover:bg-[#5D7052] hover:text-[#F3F4F1] hover:scale-110 active:scale-95"
             title="添加订阅源"
           >
             <Plus size={11} />
@@ -202,7 +202,7 @@ export default function Sidebar() {
                 'group flex items-center gap-1 px-3 py-2 rounded-full text-[13px] font-medium transition-all duration-200 cursor-pointer',
                 filter.type === 'group' && filter.groupId === group.id
                   ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_4px_12px_-2px_rgba(93,112,82,0.3)]'
-                  : 'text-[#4A4A40] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
+                  : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]'
               )}>
                 <button
                   className="p-0.5 flex-shrink-0"
@@ -263,7 +263,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="mx-4 h-px bg-[#DED8CF]/60" />
+      <div className="mx-4 h-px bg-[#DED8CF]/60 dark:bg-[#3A3830]/60" />
       <div className="px-2.5 py-2 flex gap-1">
         <button
           onClick={() => { setFilter({ type: 'all' }); navigate('/search', { replace: true }); }}
@@ -311,7 +311,7 @@ function NavItem({ icon, label, badge, active, onClick }: {
       'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[13px] font-medium transition-all duration-200',
       active
         ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_4px_12px_-2px_rgba(93,112,82,0.3)]'
-        : 'text-[#4A4A40] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
+        : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]'
     )}>
       {icon}
       <span className="flex-1 text-left">{label}</span>
@@ -344,7 +344,7 @@ function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete }: {
         'group flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-all duration-200',
         active
           ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_4px_12px_-2px_rgba(93,112,82,0.25)]'
-          : 'text-[#4A4A40] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
+          : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]'
       )}
       onClick={onSelect}
     >

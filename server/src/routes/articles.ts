@@ -42,6 +42,7 @@ export async function articleRoutes(app: FastifyInstance) {
       minScore?: string;
       tags?: string;
       before?: string; // 游标：加载此时间戳之前的文章，用于防止翻页时因已读状态变化导致的 OFFSET 偏移问题
+      beforeId?: string; // 游标辅助：与 before 配合，处理相同时间戳的多篇文章（联合游标）
     };
   }>('/api/articles', async (req) => {
     const page = Math.max(1, parseInt(req.query.page || '1'));
@@ -84,24 +85,8 @@ export async function articleRoutes(app: FastifyInstance) {
         params.push(`%,${tag},%`);
       }
     }
-    // 游标分页：当翻页时传入 before 参数，只查询比该时间戳更早的文章
-    // 这样即使前几页有文章状态变化（如标为已读），后续分页也不会因 OFFSET 偏移而丢失文章
-    if (req.query.before) {
-      where += ' AND a.effective_date < ?';
-      params.push(req.query.before);
-    }
-
-    const rows = sqlite
-      .prepare(
-        `SELECT a.*, f.title as feed_title, f.favicon as feed_favicon
-         FROM articles a
-         JOIN feeds f ON f.id = a.feed_id
-         WHERE ${where}
-         ORDER BY a.effective_date DESC
-         LIMIT ? OFFSET ?`
-      )
-      .all(...params, limit, offset);
-
+    // total 统计不含游标条件，始终返回当前过滤条件下的全量文章数
+    // 这样前端可以用「累积已加载数量 < total」准确判断是否还有更多文章
     const total = (
       sqlite
         .prepare(
@@ -109,6 +94,31 @@ export async function articleRoutes(app: FastifyInstance) {
         )
         .get(...params) as any
     ).cnt;
+
+    // 游标分页：当翻页时传入 before + beforeId 参数，联合游标防止同时间戳文章被跳过
+    // 排序字段用 COALESCE(published_at, created_at)，数据库无 effective_date 列
+    // 查询条件：sort_date < before 或 (sort_date = before AND id < beforeId)
+    if (req.query.before) {
+      if (req.query.beforeId) {
+        where += ' AND (COALESCE(a.published_at, a.created_at) < ? OR (COALESCE(a.published_at, a.created_at) = ? AND a.id < ?))';
+        params.push(req.query.before, req.query.before, req.query.beforeId);
+      } else {
+        where += ' AND COALESCE(a.published_at, a.created_at) < ?';
+        params.push(req.query.before);
+      }
+    }
+
+    const rows = sqlite
+      .prepare(
+        `SELECT a.*, f.title as feed_title, f.favicon as feed_favicon,
+                COALESCE(a.published_at, a.created_at) as effective_date
+         FROM articles a
+         JOIN feeds f ON f.id = a.feed_id
+         WHERE ${where}
+         ORDER BY COALESCE(a.published_at, a.created_at) DESC
+         LIMIT ? OFFSET ?`
+      )
+      .all(...params, limit, offset);
 
     return { articles: rows.map(toArticle), total, page, limit };
   });

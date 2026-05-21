@@ -112,6 +112,25 @@ try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_date ON articles
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(effective_date DESC)'); } catch {}
 // 专用于 /api/feeds unreadCount 子查询：WHERE feed_id = ? AND is_read = 0
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_unread ON articles(feed_id, is_read)'); } catch {}
+// url 去重查询：WHERE feed_id = ? AND url = ?
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_url ON articles(feed_id, url)'); } catch {}
+// 清理已存在的 url 重复文章：同 feed 下相同 url 只保留最早入库（created_at 最小）的那条
+try {
+  sqlite.exec(`
+    DELETE FROM articles
+    WHERE id NOT IN (
+      SELECT MIN(id) FROM articles
+      WHERE url != '' AND url IS NOT NULL
+      GROUP BY feed_id, url
+    )
+    AND url != ''
+    AND url IS NOT NULL
+    AND (
+      SELECT COUNT(*) FROM articles a2
+      WHERE a2.feed_id = articles.feed_id AND a2.url = articles.url
+    ) > 1
+  `);
+} catch {}
 
 // 默认设置，首次启动写入，后续补充可能缺失的 key
 const DEFAULT_SETTINGS: Record<string, string> = {
