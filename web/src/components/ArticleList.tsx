@@ -361,11 +361,18 @@ export default function ArticleList() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasArticles]);
 
-  // 每次加载完成（loading 变 false）且还有更多时，主动尝试加载下一页
-  // 处理 loader 始终在视口内、Observer 不再重新触发的场景
+  // 每次加载完成后，检查 loader 是否在滚动容器可视区域内
+  // 处理文章不够填满屏幕、loader 始终可见但 Observer 不重复触发的场景
   useEffect(() => {
     if (loading || !hasMore) return;
-    tryLoadMore();
+    const container = scrollContainerRef.current;
+    const loader = loaderRef.current;
+    if (!container || !loader) return;
+    // 检查 loader 是否在 container 的可视范围内
+    const containerRect = container.getBoundingClientRect();
+    const loaderRect = loader.getBoundingClientRect();
+    const isVisible = loaderRect.top < containerRect.bottom && loaderRect.bottom > containerRect.top;
+    if (isVisible) tryLoadMore();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
