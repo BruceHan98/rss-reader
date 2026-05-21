@@ -185,22 +185,20 @@ export default function ArticleList() {
         }
         // 仅对 feed/group/all 缓存第一页结果
         if (p === 1 && !isDynamic) articleListCacheRef.current.set(getFilterKey(filter), data.articles);
-        // 重置游标，记录第一页最后一篇文章的 effectiveDate 和 id（联合游标）
-        const lastArticle = data.articles[data.articles.length - 1];
-        const lastDate = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? null;
-        cursorRef.current = lastArticle && lastDate ? { date: lastDate, id: lastArticle.id } : null;
-      } else if (data.articles.length > 0) {
-        // 翻页后更新游标为当前批次最后一篇文章（联合游标）
-        const lastArticle = data.articles[data.articles.length - 1];
-        const lastDate = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? null;
-        cursorRef.current = lastDate ? { date: lastDate, id: lastArticle.id } : cursorRef.current;
       }
-      // 计算追加后的实际已加载数量，用于判断是否还有更多
-      const prevCount = reset ? 0 : articlesRef.current.length;
-      const newLoadedCount = prevCount + data.articles.length;
+      // 更新游标为当前批次最后一篇文章（联合游标）
+      if (data.articles.length > 0) {
+        const lastArticle = data.articles[data.articles.length - 1];
+        const lastDate = lastArticle?.effectiveDate ?? lastArticle?.publishedAt ?? null;
+        if (lastDate) cursorRef.current = { date: lastDate, id: lastArticle.id };
+        else if (reset) cursorRef.current = null;
+      } else if (reset) {
+        cursorRef.current = null;
+      }
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
-      // hasMore: 实际已加载数量 < 服务端当前过滤条件下的总量
-      setHasMore(newLoadedCount < data.total);
+      // hasMore 判断：本次返回文章数等于 limit，说明后面可能还有更多
+      // 不使用「累积数量 < total」，因为 total 随用户阅读行为实时减少，会导致提前停止加载
+      setHasMore(data.articles.length === data.limit);
       setPage(p);
     } catch (err: any) {
       // 请求被主动取消时不更新状态（新请求正在进行中）
