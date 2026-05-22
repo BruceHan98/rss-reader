@@ -451,12 +451,17 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   // Remove stray quotes after closing tags — artifact of malformed RSS HTML
   }).replace(/<\/a>"/g, '</a>').replace(/<\/a>&#34;/g, '</a>').replace(/<\/a>&quot;/g, '</a>');
 
+  // 剥除 <p> 开头的全角空格（U+3000）和普通空格缩进
+  // 财新等中文媒体常用 "　　文字" 代替 CSS text-indent，需先统一剥除再由 CSS 处理
+  const strippedContent = rawContent
+    ? rawContent.replace(/(<p[^>]*>)([\u3000\u00a0\s]+)/gi, '$1')
+    : rawContent;
+
   // 判断文章是否适合首行缩进
   // 规则：中文字符占比 ≥ 30%、有效段落数 ≥ 3、段落平均字符数 ≥ 40
   const shouldIndent = (() => {
-    if (!rawContent) return false;
-    // 用 DOMParser 解析，提取顶层 <p> 的文本（排除图片段落）
-    const doc = new DOMParser().parseFromString(rawContent, 'text/html');
+    if (!strippedContent) return false;
+    const doc = new DOMParser().parseFromString(strippedContent, 'text/html');
     const paragraphs = Array.from(doc.querySelectorAll('p')).filter((p) => {
       // 排除只含图片的段落
       const imgs = p.querySelectorAll('img');
@@ -464,28 +469,70 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       return !(imgs.length > 0 && text.length === 0);
     });
     if (paragraphs.length < 3) return false;
+    // 检测是否已有内联 text-indent 样式（避免双重缩进）
+    const indentedCount = paragraphs.filter((p) =>
+      /text-indent\s*:/i.test(p.getAttribute('style') ?? '')
+    ).length;
+    if (indentedCount / paragraphs.length > 0.3) return false;
     const texts = paragraphs.map((p) => p.textContent?.trim() ?? '').filter(Boolean);
     const totalChars = texts.reduce((sum, t) => sum + t.length, 0);
-    const avgLen = totalChars / texts.length;
-    if (avgLen < 40) return false;
+    if (totalChars / texts.length < 40) return false;
     // 检测中文字符占比
     const chineseChars = texts.join('').match(/[\u4e00-\u9fa5]/g)?.length ?? 0;
-    const chineseRatio = totalChars > 0 ? chineseChars / totalChars : 0;
-    if (chineseRatio < 0.3) return false;
+    if (totalChars > 0 && chineseChars / totalChars < 0.3) return false;
     return true;
   })();
 
-  // 去除正文开头与页面标题重复的标题标签（h1/h2/h3）
+  // 去除正文中与页面标题重复的内容块，以及媒体页面专有的文章头部元信息区块
   const safeContent = (() => {
-    if (!article.title || !rawContent) return rawContent;
-    const normalizeText = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
-    const titleNorm = normalizeText(article.title);
-    // 匹配开头的 h1/h2/h3 标签（允许有属性，允许前面有空白）
-    return rawContent.replace(/^(\s*<h[1-3][^>]*>)([\s\S]*?)(<\/h[1-3]>)/i, (match, open, inner, close) => {
-      // 去掉 inner 中所有 HTML 标签，只保留纯文本做比较
-      const innerText = normalizeText(inner.replace(/<[^>]+>/g, ''));
-      return innerText === titleNorm ? '' : match;
+    const base = strippedContent;
+    if (!base) return base;
+
+    const doc = new DOMParser().parseFromString(base, 'text/html');
+
+    // 移除财新等媒体页面专有的元信息容器（标题区、发布信息、版权墙等）
+    const JUNK_SELECTORS = [
+      '#conTit',       // 财新文章头部（含 h1 标题 + 发布信息）
+      '.artInfo',      // 发布时间/来源/作者区
+      '.bd_block',     // 百度爬虫元信息
+      '#chargeWall',   // 付费墙
+      '#pay-box',      // 付费弹层
+      '#pay-layer-ad',
+      '#pay-layer-pro-ad',
+      '.payreadwarp',
+    ];
+    JUNK_SELECTORS.forEach((sel) => {
+      doc.querySelectorAll(sel).forEach((el) => el.remove());
     });
+
+    if (article.title) {
+      const normalizeText = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+      const titleNorm = normalizeText(article.title);
+
+      // 判断两段文本是否"实质相同"：完全一致，或一方包含另一方
+      // 要求标题至少 10 字符才做包含比较，避免短标题误删正文
+      const isSameTitle = (a: string, b: string) => {
+        if (!a || !b) return false;
+        if (a === b) return true;
+        const minLen = 10;
+        if (b.length >= minLen && a.includes(b)) return true;
+        if (a.length >= minLen && b.includes(a)) return true;
+        return false;
+      };
+
+      // 遍历所有 h1~h6 和顶层 p，移除文本与标题实质相同的节点
+      doc.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((el) => {
+        if (isSameTitle(normalizeText(el.textContent ?? ''), titleNorm)) el.remove();
+      });
+
+      // 移除第一个文本内容与标题实质相同的 <p>
+      const firstP = doc.body.querySelector('p');
+      if (firstP && isSameTitle(normalizeText(firstP.textContent ?? ''), titleNorm)) {
+        firstP.remove();
+      }
+    }
+
+    return doc.body.innerHTML;
   })();
 
   return (
