@@ -4,7 +4,7 @@ import hljs from 'highlight.js';
 import { api, type Article } from '../lib/api';
 import { useStore } from '../store';
 import { formatDate } from '../lib/utils';
-import { ExternalLink, Star, Clock, Loader2, ALargeSmall, AlignJustify, Sparkles, Tag, ArrowLeft } from 'lucide-react';
+import { ExternalLink, Star, Clock, Loader2, ALargeSmall, AlignJustify, Sparkles, Tag, ArrowLeft, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 // Custom organic reading styles injected once
@@ -30,13 +30,14 @@ const READER_STYLES = `
   .article-body h1 { font-size: 1.6rem; }
   .article-body h2 { font-size: 1.35rem; }
   .article-body h3 { font-size: 1.15rem; }
-  .article-body p { margin-bottom: 1.2em; text-indent: 2em; text-align: justify; }
-  .article-body blockquote p,
-  .article-body li p,
-  .article-body pre p,
-  .article-body code p,
-  .article-body p:has(> img:only-child),
-  .article-body p:has(> a > img:only-child) { text-indent: 0; }
+  .article-body p { margin-bottom: 1.2em; text-align: justify; }
+  .article-body.indent-paragraphs p { text-indent: 2em; }
+  .article-body.indent-paragraphs blockquote p,
+  .article-body.indent-paragraphs li p,
+  .article-body.indent-paragraphs pre p,
+  .article-body.indent-paragraphs code p,
+  .article-body.indent-paragraphs p:has(> img:only-child),
+  .article-body.indent-paragraphs p:has(> a > img:only-child) { text-indent: 0; }
   .article-body a {
     color: #5D7052;
     text-decoration: underline;
@@ -185,6 +186,14 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   const [fontKey, setFontKey] = useState<FontKey>(() => loadPref('reader-font', 'md'));
   const [showWidthPicker, setShowWidthPicker] = useState(false);
   const [showFontPicker, setShowFontPicker] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(msg: string, type: 'success' | 'error') {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ msg, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  }
 
   const widthPreset = WIDTH_PRESETS.find((p) => p.key === widthKey)!;
   const fontPreset = FONT_PRESETS.find((p) => p.key === fontKey)!;
@@ -360,27 +369,46 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article?.id]);
 
+  const [starPending, setStarPending] = useState(false);
+  const [readLaterPending, setReadLaterPending] = useState(false);
+
   async function handleStar() {
-    if (!article) return;
-    const snapshot = article;
-    setArticle({ ...article, isStarred: !article.isStarred }); // 乐观更新
+    if (!article || starPending) return;
+    setStarPending(true);
+    const prevStarred = article.isStarred;
+    const nextStarred = !prevStarred;
+    setArticle((prev) => prev ? { ...prev, isStarred: nextStarred } : prev); // 乐观更新
     try {
       const res = await api.toggleStar(article.id);
-      setArticle({ ...snapshot, isStarred: res.isStarred });
+      setArticle((prev) => prev ? { ...prev, isStarred: res.isStarred } : prev);
+      // 通知列表更新对应文章的收藏状态
+      window.dispatchEvent(new CustomEvent('article-starred', { detail: { articleId: article.id, isStarred: res.isStarred } }));
+      showToast(res.isStarred ? '已加入收藏' : '已取消收藏', 'success');
     } catch {
-      setArticle(snapshot); // 失败回滚
+      setArticle((prev) => prev ? { ...prev, isStarred: prevStarred } : prev); // 失败回滚
+      showToast('操作失败，请重试', 'error');
+    } finally {
+      setStarPending(false);
     }
   }
 
   async function handleReadLater() {
-    if (!article) return;
-    const snapshot = article;
-    setArticle({ ...article, isReadLater: !article.isReadLater }); // 乐观更新
+    if (!article || readLaterPending) return;
+    setReadLaterPending(true);
+    const prevReadLater = article.isReadLater;
+    const nextReadLater = !prevReadLater;
+    setArticle((prev) => prev ? { ...prev, isReadLater: nextReadLater } : prev); // 乐观更新
     try {
       const res = await api.toggleReadLater(article.id);
-      setArticle({ ...snapshot, isReadLater: res.isReadLater });
+      setArticle((prev) => prev ? { ...prev, isReadLater: res.isReadLater } : prev);
+      // 通知列表更新对应文章的稍后阅读状态
+      window.dispatchEvent(new CustomEvent('article-read-later', { detail: { articleId: article.id, isReadLater: res.isReadLater } }));
+      showToast(res.isReadLater ? '已加入稍后阅读' : '已从稍后阅读移除', 'success');
     } catch {
-      setArticle(snapshot); // 失败回滚
+      setArticle((prev) => prev ? { ...prev, isReadLater: prevReadLater } : prev); // 失败回滚
+      showToast('操作失败，请重试', 'error');
+    } finally {
+      setReadLaterPending(false);
     }
   }
 
@@ -423,8 +451,31 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   // Remove stray quotes after closing tags — artifact of malformed RSS HTML
   }).replace(/<\/a>"/g, '</a>').replace(/<\/a>&#34;/g, '</a>').replace(/<\/a>&quot;/g, '</a>');
 
+  // 判断文章是否适合首行缩进
+  // 规则：中文字符占比 ≥ 30%、有效段落数 ≥ 3、段落平均字符数 ≥ 40
+  const shouldIndent = (() => {
+    if (!rawContent) return false;
+    // 用 DOMParser 解析，提取顶层 <p> 的文本（排除图片段落）
+    const doc = new DOMParser().parseFromString(rawContent, 'text/html');
+    const paragraphs = Array.from(doc.querySelectorAll('p')).filter((p) => {
+      // 排除只含图片的段落
+      const imgs = p.querySelectorAll('img');
+      const text = p.textContent?.trim() ?? '';
+      return !(imgs.length > 0 && text.length === 0);
+    });
+    if (paragraphs.length < 3) return false;
+    const texts = paragraphs.map((p) => p.textContent?.trim() ?? '').filter(Boolean);
+    const totalChars = texts.reduce((sum, t) => sum + t.length, 0);
+    const avgLen = totalChars / texts.length;
+    if (avgLen < 40) return false;
+    // 检测中文字符占比
+    const chineseChars = texts.join('').match(/[\u4e00-\u9fa5]/g)?.length ?? 0;
+    const chineseRatio = totalChars > 0 ? chineseChars / totalChars : 0;
+    if (chineseRatio < 0.3) return false;
+    return true;
+  })();
+
   // 去除正文开头与页面标题重复的标题标签（h1/h2/h3）
-  // 部分 RSS feed 在内容里也包含文章标题，导致页面标题出现两次
   const safeContent = (() => {
     if (!article.title || !rawContent) return rawContent;
     const normalizeText = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -462,8 +513,9 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           {/* Action buttons */}
           <button
             onClick={handleStar}
+            disabled={starPending}
             className={cn(
-              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
+              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed',
               article.isStarred
                 ? 'bg-[#C18C5D]/15 text-[#C18C5D]'
                 : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#C18C5D]/15 hover:text-[#C18C5D]'
@@ -475,8 +527,9 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
           <button
             onClick={handleReadLater}
+            disabled={readLaterPending}
             className={cn(
-              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
+              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed',
               article.isReadLater
                 ? 'bg-[#5D7052]/15 text-[#5D7052]'
                 : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#5D7052]/15 hover:text-[#5D7052]'
@@ -683,7 +736,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           {/* Content */}
           {safeContent ? (
             <div
-              className="article-body"
+              className={cn('article-body', shouldIndent && 'indent-paragraphs')}
               style={{ fontSize: fontPreset.size }}
               dangerouslySetInnerHTML={{ __html: safeContent }}
             />
@@ -710,6 +763,28 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         {/* Spacer for fixed bottom nav on mobile */}
         <div className="h-14 md:hidden" />
       </div>
+
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={cn(
+            'fixed bottom-20 lg:bottom-5 left-1/2 -translate-x-1/2 z-50',
+            'flex items-center gap-2.5 px-4 py-3 rounded-2xl',
+            'shadow-[0_8px_24px_-4px_rgba(44,44,36,0.18)]',
+            'text-sm font-medium min-w-[200px] max-w-[300px]',
+            'animate-[slideUp_0.2s_ease-out]',
+            toast.type === 'success' ? 'bg-[#5D7052] text-[#F3F4F1]' : 'bg-[#A85448] text-white'
+          )}
+        >
+          {toast.type === 'success'
+            ? <CheckCircle size={15} className="shrink-0" />
+            : <AlertCircle size={15} className="shrink-0" />}
+          <span className="flex-1">{toast.msg}</span>
+          <button onClick={() => setToast(null)} className="opacity-70 hover:opacity-100 active:scale-95">
+            <X size={13} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

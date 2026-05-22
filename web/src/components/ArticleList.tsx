@@ -107,6 +107,62 @@ export default function ArticleList() {
     return () => window.removeEventListener('article-read', onArticleRead);
   }, []);
 
+  // 监听收藏/稍后阅读状态变更事件，同步更新列表中对应文章的状态
+  useEffect(() => {
+    function onArticleStarred(e: Event) {
+      const { articleId, isStarred } = (e as CustomEvent).detail;
+      // 始终同步列表内已存在文章的 isStarred 字段
+      setArticles((prev) => prev.map((a) => a.id === articleId ? { ...a, isStarred } : a));
+      if (filterRef.current.type === 'starred') {
+        if (!isStarred) {
+          // 取消收藏：从收藏列表移除
+          setArticles((prev) => prev.filter((a) => a.id !== articleId));
+          setTotal((prev) => Math.max(0, prev - 1));
+          setDisplayTotal((prev) => Math.max(0, prev - 1));
+        } else {
+          // 新增收藏：从后端拉取文章完整数据后插入列表头部
+          api.getArticle(articleId).then((article) => {
+            setArticles((prev) => {
+              if (prev.some((a) => a.id === articleId)) return prev; // 已在列表中，不重复添加
+              return [article, ...prev];
+            });
+            setTotal((prev) => prev + 1);
+            setDisplayTotal((prev) => prev + 1);
+          }).catch(() => {});
+        }
+      }
+    }
+    function onArticleReadLater(e: Event) {
+      const { articleId, isReadLater } = (e as CustomEvent).detail;
+      // 始终同步列表内已存在文章的 isReadLater 字段
+      setArticles((prev) => prev.map((a) => a.id === articleId ? { ...a, isReadLater } : a));
+      if (filterRef.current.type === 'read-later') {
+        if (!isReadLater) {
+          // 取消稍后阅读：从列表移除
+          setArticles((prev) => prev.filter((a) => a.id !== articleId));
+          setTotal((prev) => Math.max(0, prev - 1));
+          setDisplayTotal((prev) => Math.max(0, prev - 1));
+        } else {
+          // 新增稍后阅读：从后端拉取文章完整数据后插入列表头部
+          api.getArticle(articleId).then((article) => {
+            setArticles((prev) => {
+              if (prev.some((a) => a.id === articleId)) return prev;
+              return [article, ...prev];
+            });
+            setTotal((prev) => prev + 1);
+            setDisplayTotal((prev) => prev + 1);
+          }).catch(() => {});
+        }
+      }
+    }
+    window.addEventListener('article-starred', onArticleStarred);
+    window.addEventListener('article-read-later', onArticleReadLater);
+    return () => {
+      window.removeEventListener('article-starred', onArticleStarred);
+      window.removeEventListener('article-read-later', onArticleReadLater);
+    };
+  }, []);
+
   // Independent AI job completion polling.
   // After ai-job-started, poll every 2s until done, then refresh article list and tags.
   const aiPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
