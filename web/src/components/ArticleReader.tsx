@@ -188,6 +188,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   const [showFontPicker, setShowFontPicker] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   function showToast(msg: string, type: 'success' | 'error') {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -365,10 +366,20 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           img.replaceWith(placeholder);
         }
       };
+      // 标记可点击预览
+      img.style.cursor = 'zoom-in';
+      img.dataset.lightbox = 'true';
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article?.id]);
 
+  // Esc 键关闭灯箱
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxSrc(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightboxSrc]);
   const [starPending, setStarPending] = useState(false);
   const [readLaterPending, setReadLaterPending] = useState(false);
 
@@ -786,6 +797,10 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
               className={cn('article-body', shouldIndent && 'indent-paragraphs')}
               style={{ fontSize: fontPreset.size }}
               dangerouslySetInnerHTML={{ __html: safeContent }}
+              onClick={(e) => {
+                const img = (e.target as HTMLElement).closest('img[data-lightbox]') as HTMLImageElement | null;
+                if (img) setLightboxSrc(img.currentSrc || img.src);
+              }}
             />
           ) : (
             <div className="text-center py-14">
@@ -810,6 +825,28 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         {/* Spacer for fixed bottom nav on mobile */}
         <div className="h-14 md:hidden" />
       </div>
+
+      {/* Image lightbox */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm cursor-zoom-out"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img
+            src={lightboxSrc}
+            alt=""
+            className="max-w-[92vw] max-h-[90vh] rounded-2xl shadow-2xl object-contain select-none"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors active:scale-95"
+            onClick={() => setLightboxSrc(null)}
+            aria-label="关闭"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
 
       {/* Toast notification */}
       {toast && (
