@@ -540,7 +540,18 @@ export default function ArticleList() {
             <span className="text-[11px] text-[#78786C]/60 dark:text-[#5A5850]">{(filter.type === 'unread' || showUnreadOnly) ? displayTotal : total} 篇</span>
           </div>
           <div className="flex items-center gap-1">
-            {/* Unread-only filter */}
+            {/* 拉取消息 */}
+            {(filter.type === 'all' || filter.type === 'feed' || filter.type === 'group') && (
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0 disabled:opacity-40"
+                title={filter.type === 'feed' ? '刷新该订阅源' : '刷新所有订阅'}
+              >
+                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+              </button>
+            )}
+            {/* 只看未读 */}
             {canShowUnreadFilter && (
               <button
                 onClick={() => setShowUnreadOnly((v) => !v)}
@@ -555,7 +566,25 @@ export default function ArticleList() {
                 <CircleDot size={13} strokeWidth={showUnreadOnly ? 2.5 : 1.75} />
               </button>
             )}
-            {/* AI filter toggle */}
+            {/* 打分 */}
+            <button
+              onClick={() => handleAiQuick('score')}
+              disabled={!!aiQuickTrigger}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#C18C5D]/15 hover:text-[#C18C5D] active:scale-95 flex-shrink-0 disabled:opacity-40"
+              title="质量打分"
+            >
+              {aiQuickTrigger === 'score' ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
+            </button>
+            {/* 打标签 */}
+            <button
+              onClick={() => handleAiQuick('tags')}
+              disabled={!!aiQuickTrigger}
+              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#C18C5D]/15 hover:text-[#C18C5D] active:scale-95 flex-shrink-0 disabled:opacity-40"
+              title="标签提取"
+            >
+              {aiQuickTrigger === 'tags' ? <Loader2 size={13} className="animate-spin" /> : <Hash size={13} />}
+            </button>
+            {/* 筛选 */}
             <button
               onClick={() => setShowTagFilter((v) => !v)}
               className={cn(
@@ -568,33 +597,7 @@ export default function ArticleList() {
             >
               <Sparkles size={13} />
             </button>
-            {/* AI quick actions */}
-            <button
-              onClick={() => handleAiQuick('score')}
-              disabled={!!aiQuickTrigger}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#C18C5D]/15 hover:text-[#C18C5D] active:scale-95 flex-shrink-0 disabled:opacity-40"
-              title="质量打分"
-            >
-              {aiQuickTrigger === 'score' ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
-            </button>
-            <button
-              onClick={() => handleAiQuick('tags')}
-              disabled={!!aiQuickTrigger}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#C18C5D]/15 hover:text-[#C18C5D] active:scale-95 flex-shrink-0 disabled:opacity-40"
-              title="标签提取"
-            >
-              {aiQuickTrigger === 'tags' ? <Loader2 size={13} className="animate-spin" /> : <Hash size={13} />}
-            </button>
-            {(filter.type === 'all' || filter.type === 'feed' || filter.type === 'group') && (
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0 disabled:opacity-40"
-                title={filter.type === 'feed' ? '刷新该订阅源' : '刷新所有订阅'}
-              >
-                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-              </button>
-            )}
+            {/* 全部标记已读 */}
             <button
               onClick={handleMarkAllRead}
               className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0"

@@ -20,6 +20,9 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+.cursor/
+.catpaw/
+.codegraph/
 
 # Archives
 *.tar.gz
