@@ -97,6 +97,9 @@ const articleDetailCache = new Map<string, Article>();
 export function invalidateArticleCache(id: string) {
   articleDetailCache.delete(id);
 }
+export function cacheArticle(article: Article) {
+  articleDetailCache.set(article.id, article);
+}
 
 // 携带 HTTP 状态码的错误类，让调用方可精确判断是否为 401
 export class ApiError extends Error {
@@ -160,11 +163,23 @@ export const api = {
     articleDetailCache.set(id, article);
     return article;
   },
-  markRead: (id: string, isRead = true) => {
+  markRead: async (id: string, isRead = true) => {
     // 同步更新缓存中的已读状态
     const cached = articleDetailCache.get(id);
     if (cached) articleDetailCache.set(id, { ...cached, isRead });
-    return request<void>(`/articles/${id}/read`, { method: 'PUT', body: JSON.stringify({ isRead }) });
+    // 最多重试 3 次，确保已读状态可靠写入，防止网络抖动导致静默丢失
+    let lastErr: unknown;
+    for (let i = 0; i < 3; i++) {
+      try {
+        return await request<void>(`/articles/${id}/read`, { method: 'PUT', body: JSON.stringify({ isRead }) });
+      } catch (err) {
+        lastErr = err;
+        // 401 未登录不重试
+        if ((err as any)?.status === 401) throw err;
+        if (i < 2) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+      }
+    }
+    throw lastErr;
   },
   toggleStar: async (id: string) => {
     const res = await request<{ isStarred: boolean }>(`/articles/${id}/star`, { method: 'PUT' });

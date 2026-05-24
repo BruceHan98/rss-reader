@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { api, type Article, type AiTag } from '../lib/api';
+import { api, cacheArticle, type Article, type AiTag } from '../lib/api';
 import { cn, relativeTime } from '../lib/utils';
 import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Menu, Rss, CheckCircle, AlertCircle, CircleDot } from 'lucide-react';
 import FeedIcon from './FeedIcon';
@@ -97,11 +97,15 @@ export default function ArticleList() {
     api.getAiTags().then((r) => setAllTags(r.tags)).catch(() => {});
   }, []);
 
-  // 监听文章被阅读事件，更新本地列表 isRead 状态（保持未读条显示直到真正阅读）
+  // 监听文章被阅读事件，更新本地列表 isRead 状态
   useEffect(() => {
     function onArticleRead(e: Event) {
       const { articleId } = (e as CustomEvent).detail;
       setArticles((prev) => prev.map((a) => a.id === articleId ? { ...a, isRead: true } : a));
+      // 同步更新列表缓存中的 isRead 状态，避免切换 filter 时从缓存展示已读的旧数据
+      for (const [key, cached] of articleListCacheRef.current.entries()) {
+        articleListCacheRef.current.set(key, cached.map((a) => a.id === articleId ? { ...a, isRead: true } : a));
+      }
     }
     window.addEventListener('article-read', onArticleRead);
     return () => window.removeEventListener('article-read', onArticleRead);
@@ -433,8 +437,10 @@ export default function ArticleList() {
   async function handleSelect(article: Article) {
     if (!article.isRead) {
       if (filter.type === 'unread' || showUnreadOnly) decDisplayTotal();
-      // 先标记后端已读，同时 dispatch 事件让列表更新 isRead（保证列表状态与后端一致）
-      // 不做同步乐观更新，由 article-read 事件回调异步更新，视觉上保留未读条直到事件触发
+      // 先把带 isRead:true 的文章写入详情缓存，确保 ArticleReader 加载时读到的是最新已读状态
+      // 避免因竞态导致 ArticleReader 的 onRead 回调被重复触发（从而重复扣减 unreadCount）
+      cacheArticle({ ...article, isRead: true });
+      // 发起后端已读标记，成功后 dispatch 事件更新列表
       api.markRead(article.id).then(() => {
         window.dispatchEvent(new CustomEvent('article-read', { detail: { articleId: article.id } }));
       }).catch(() => {});
