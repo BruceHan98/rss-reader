@@ -230,12 +230,16 @@ async function runJob(jobId: string, type: JobType, feedId?: string, groupId?: s
     params.push(groupId);
   }
 
+  // 每天最多处理 100 篇，取最新的 100 篇（按发布时间倒序）
+  const DAILY_LIMIT = 100;
+
   const rows = sqlite
     .prepare(
       `SELECT a.id, a.title, a.summary, a.content, a.ai_score, a.ai_tags
        FROM articles a
        WHERE ${whereClause}
-       ORDER BY a.published_at DESC`
+       ORDER BY a.published_at DESC
+       LIMIT ${DAILY_LIMIT}`
     )
     .all(...params) as Array<{
       id: string;

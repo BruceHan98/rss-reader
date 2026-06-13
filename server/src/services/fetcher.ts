@@ -186,6 +186,17 @@ export async function fetchFeed(feed: Feed): Promise<{ count: number; error?: st
         if (existingByUrl) continue;
       }
 
+      // 三次去重：跨订阅源同标题去重，防止不同来源转载同一篇文章重复入库
+      // 仅对有标题的文章做去重，且只在最近 7 天内查找（避免误判同名不同文章）
+      const articleTitle = item.title?.trim() || '';
+      if (articleTitle) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const existingByTitle = sqlite
+          .prepare('SELECT id FROM articles WHERE title = ? AND published_at > ?')
+          .get(articleTitle, sevenDaysAgo);
+        if (existingByTitle) continue;
+      }
+
       let content = (item as any).contentEncoded || item.content || item.description || '';
       const summary = item.contentSnippet || item.summary || '';
 

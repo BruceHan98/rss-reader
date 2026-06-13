@@ -774,7 +774,7 @@ ArticleItem({
           ? 'bg-[#5D7052]/10 border-[#5D7052]/30 shadow-[0_2px_12px_-2px_rgba(93,112,82,0.18)] ring-1 ring-[#5D7052]/15'
           : [
               'bg-[#FEFEFA] dark:bg-[#232320] border-[#DED8CF]/40 dark:border-[#3A3830]/60',
-              'hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.1)] hover:border-[#DED8CF]/70 dark:hover:border-[#3A3830]',
+              'lg:hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.1)] lg:hover:border-[#DED8CF]/70 dark:lg:hover:border-[#3A3830]/80',
               !article.isRead && 'border-l-2 border-l-[#5D7052]/50',
             ],
       )}
