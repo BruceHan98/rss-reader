@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
+import mermaid from 'mermaid';
 import { api, type Article } from '../lib/api';
 import { useStore } from '../store';
 import { formatDate } from '../lib/utils';
@@ -142,6 +143,25 @@ margin-bottom: 1.2em;
   .dark .article-body th { background: #252420; border-color: #3A3830; color: #E8E6DF; }
   .dark .article-body tr:nth-child(even) td { background: #1C1C18; }
   .dark .article-body hr { border-color: #3A3830; }
+  /* Mermaid diagram */
+  .article-body .mermaid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 1.5em 0;
+    text-align: center;
+    background: #F7F4EF;
+    border: 1px solid #DED8CF;
+    border-radius: 1rem;
+    padding: 1.25em 1em;
+  }
+  .article-body .mermaid-wrap svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .dark .article-body .mermaid-wrap {
+    background: #252420;
+    border-color: #3A3830;
+  }
 `;
 
 // Width presets: max-w class and label
@@ -267,9 +287,14 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     fetchArticle();
     return () => {
       fetchCancelRef.current = true;
-      // 离开时保存当前滚动位置
-      if (scrollRef.current && scrollRef.current.scrollTop > 0) {
-        localStorage.setItem(`read-pos:${articleId}`, String(scrollRef.current.scrollTop));
+      // 离开时保存当前滚动位置（包括 0，确保用户滚回顶部后下次从头开始）
+      if (scrollRef.current) {
+        const pos = scrollRef.current.scrollTop;
+        if (pos > 0) {
+          localStorage.setItem(`read-pos:${articleId}`, String(pos));
+        } else {
+          localStorage.removeItem(`read-pos:${articleId}`);
+        }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -293,7 +318,44 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   useEffect(() => {
     if (!article) return;
+
+    // 渲染 mermaid 流程图
+    // 匹配 <pre><code class="language-mermaid">...</code></pre> 或 <code class="mermaid">...</code>
+    const mermaidBlocks: { container: Element; code: string }[] = [];
+    document.querySelectorAll('.article-body pre code.language-mermaid, .article-body code.mermaid').forEach((el) => {
+      const code = el.textContent || '';
+      if (!code.trim()) return;
+      const container = el.tagName === 'CODE' && el.parentElement?.tagName === 'PRE'
+        ? el.parentElement
+        : el;
+      mermaidBlocks.push({ container, code: code.trim() });
+    });
+
+    if (mermaidBlocks.length > 0) {
+      const isDark = document.documentElement.classList.contains('dark');
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isDark ? 'dark' : 'neutral',
+        securityLevel: 'loose',
+      });
+
+      mermaidBlocks.forEach(async ({ container, code }, i) => {
+        try {
+          const id = `mermaid-${article.id}-${i}`;
+          const { svg } = await mermaid.render(id, code);
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mermaid-wrap';
+          wrapper.innerHTML = svg;
+          container.replaceWith(wrapper);
+        } catch {
+          // 渲染失败保持原样
+        }
+      });
+    }
+
     document.querySelectorAll('.article-body pre code').forEach((block) => {
+      // 跳过已处理的 mermaid 块
+      if (block.classList.contains('language-mermaid') || block.classList.contains('mermaid')) return;
       hljs.highlightElement(block as HTMLElement);
     });
     // 将表格包裹在可横向滚动的容器内，防止撑破页面宽度
@@ -703,11 +765,13 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         className="flex-1 overflow-y-auto overflow-x-hidden"
         onScroll={(e) => {
           const el=e.currentTarget;
-          // 节流保存阅读位置（500ms 防抖）
+          // 节流保存阅读位置（500ms 防抖），scrollTop=0 时清除记录使下次从头开始
           if (saveScrollTimer.current) clearTimeout(saveScrollTimer.current);
           saveScrollTimer.current = setTimeout(() => {
             if (el.scrollTop > 0) {
               localStorage.setItem(`read-pos:${articleId}`, String(el.scrollTop));
+            } else {
+              localStorage.removeItem(`read-pos:${articleId}`);
             }
           }, 500);
           if (window.innerWidth >= 768) return;
@@ -784,12 +848,8 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
             </div>
           )}
 
-          {/* Organic divider */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-0.5 flex-1 bg-gradient-to-r from-[#5D7052]/20 to-transparent rounded-full" />
-            <div className="w-2 h-2 rounded-full bg-[#C18C5D]/40" />
-            <div className="h-0.5 flex-1 bg-gradient-to-l from-[#5D7052]/20 to-transparent rounded-full" />
-          </div>
+          {/* Divider */}
+          <div className="h-px bg-[#E8E4DC] dark:bg-[#2E2B25] mb-8" />
 
           {/* Content */}
           {safeContent ? (

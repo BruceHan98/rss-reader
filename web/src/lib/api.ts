@@ -8,6 +8,7 @@ export interface Feed {
   lastFetchedAt: string | null;
   fetchInterval: number;
   errorCount: number;
+  isHidden: boolean;
   createdAt: string;
   unreadCount: number;
 }
@@ -163,7 +164,7 @@ export const api = {
     articleDetailCache.set(id, article);
     return article;
   },
-  markRead: async (id: string, isRead = true) => {
+  markRead: async (id: string, isRead = true, opened = false) => {
     // 同步更新缓存中的已读状态
     const cached = articleDetailCache.get(id);
     if (cached) articleDetailCache.set(id, { ...cached, isRead });
@@ -171,7 +172,7 @@ export const api = {
     let lastErr: unknown;
     for (let i = 0; i < 3; i++) {
       try {
-        return await request<void>(`/articles/${id}/read`, { method: 'PUT', body: JSON.stringify({ isRead }) });
+        return await request<void>(`/articles/${id}/read`, { method: 'PUT', body: JSON.stringify({ isRead, ...(opened ? { opened: true } : {}) }) });
       } catch (err) {
         lastErr = err;
         // 401 未登录不重试

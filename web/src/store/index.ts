@@ -41,7 +41,7 @@ interface AppState {
 
   updateSettings: (data: Partial<Settings>) => Promise<void>;
 
-  markArticleRead: (id: string, isRead?: boolean, feedId?: string) => Promise<void>;
+  markArticleRead: (id: string, isRead?: boolean, feedId?: string, opened?: boolean) => Promise<void>;
   toggleStar: (id: string) => Promise<{ isStarred: boolean }>;
   toggleReadLater: (id: string) => Promise<{ isReadLater: boolean }>;
   markAllRead: (params?: { feedId?: string; groupId?: string }) => Promise<void>;
@@ -139,7 +139,7 @@ export const useStore = create<AppState>((set, get) => ({
     applyFontSettings(updated.fontSize, updated.lineHeight);
   },
 
-  markArticleRead: async (id, isRead = true, feedId?: string) => {
+  markArticleRead: async (id, isRead = true, feedId?: string, opened = false) => {
     if (feedId) {
       // Optimistically update unreadCount before the API call
       set((s) => ({
@@ -151,7 +151,7 @@ export const useStore = create<AppState>((set, get) => ({
       }));
     }
     try {
-      await api.markRead(id, isRead);
+      await api.markRead(id, isRead, opened);
     } catch (err) {
       // Roll back optimistic update on failure
       if (feedId) {

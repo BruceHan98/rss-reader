@@ -20,6 +20,7 @@ export async function feedRoutes(app: FastifyInstance) {
         lastFetchedAt: feeds.lastFetchedAt,
         fetchInterval: feeds.fetchInterval,
         errorCount: feeds.errorCount,
+        isHidden: feeds.isHidden,
         createdAt: feeds.createdAt,
         unreadCount: sql<number>`(SELECT COUNT(*) FROM articles WHERE feed_id = ${feeds.id} AND is_read = 0)`,
       })
@@ -64,7 +65,7 @@ export async function feedRoutes(app: FastifyInstance) {
   // PUT /api/feeds/:id
   app.put<{
     Params: { id: string };
-    Body: { title?: string; groupId?: string | null; fetchInterval?: number };
+    Body: { title?: string; groupId?: string | null; fetchInterval?: number; isHidden?: boolean };
   }>('/api/feeds/:id', async (req, reply) => {
     const { id } = req.params;
     const existing = await db.select().from(feeds).where(eq(feeds.id, id));
@@ -73,6 +74,7 @@ export async function feedRoutes(app: FastifyInstance) {
     if (req.body.title !== undefined) updates.title = req.body.title;
     if (req.body.groupId !== undefined) updates.groupId = req.body.groupId;
     if (req.body.fetchInterval !== undefined) updates.fetchInterval = req.body.fetchInterval;
+    if (req.body.isHidden !== undefined) updates.isHidden = req.body.isHidden;
     await db.update(feeds).set(updates).where(eq(feeds.id, id));
     const updated = await db.select().from(feeds).where(eq(feeds.id, id));
     return updated[0];

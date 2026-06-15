@@ -56,6 +56,9 @@ export async function articleRoutes(app: FastifyInstance) {
     if (req.query.feedId) {
       where += ' AND a.feed_id = ?';
       params.push(req.query.feedId);
+    } else {
+      // 非精确订阅源过滤时，排除已隐藏的订阅源（全部/未读/分组/收藏/稍后阅读视图均生效）
+      where += ' AND f.is_hidden = 0';
     }
     if (req.query.groupId) {
       where += ' AND f.group_id = ?';
@@ -137,12 +140,22 @@ export async function articleRoutes(app: FastifyInstance) {
   });
 
   // PUT /api/articles/:id/read
-  app.put<{ Params: { id: string }; Body: { isRead?: boolean } }>(
+  // Body: { isRead?: boolean; opened?: boolean }
+  // opened=true 表示用户实际点进去阅读，此时同时写入 opened_at（仅首次打开时记录）
+  app.put<{ Params: { id: string }; Body: { isRead?: boolean; opened?: boolean } }>(
     '/api/articles/:id/read',
     async (req) => {
       const isRead = req.body?.isRead !== false;
-      const readAt = isRead ? new Date().toISOString() : null;
-      await db.update(articles).set({ isRead, readAt }).where(eq(articles.id, req.params.id));
+      const now = new Date().toISOString();
+      const readAt = isRead ? now : null;
+      if (req.body?.opened && isRead) {
+        // 首次打开才写 opened_at，已有值则保留（COALESCE 语义）
+        sqlite
+          .prepare('UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?), opened_at = COALESCE(opened_at, ?) WHERE id = ?')
+          .run(now, now, req.params.id);
+      } else {
+        await db.update(articles).set({ isRead, readAt }).where(eq(articles.id, req.params.id));
+      }
       return { success: true };
     }
   );
@@ -165,15 +178,15 @@ export async function articleRoutes(app: FastifyInstance) {
     return { isReadLater: newVal };
   });
 
-  // GET /api/stats/reading - 按天统计实际阅读文章数（近 6 个月）
+  // GET /api/stats/reading - 按天统计实际打开阅读的文章数（近 6 个月）
+  // 仅统计 opened_at 有值的记录（用户真正点进去看的），忽略手动/滚动标记已读
   app.get('/api/stats/reading', async () => {
     const rows = sqlite
       .prepare(
-        `SELECT date(read_at) as day, COUNT(*) as count
+        `SELECT date(opened_at) as day, COUNT(*) as count
          FROM articles
-         WHERE is_read = 1
-           AND read_at IS NOT NULL
-           AND read_at >= date('now', '-6 months')
+         WHERE opened_at IS NOT NULL
+           AND opened_at >= date('now', '-6 months')
          GROUP BY day
          ORDER BY day ASC`
       )

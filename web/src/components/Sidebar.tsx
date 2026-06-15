@@ -8,7 +8,7 @@ import FeedIcon from './FeedIcon';
 import {
   Rss, Star, Clock, Search, Settings, ChevronDown, ChevronRight,
   Plus, RefreshCw, Trash2, Inbox, BookOpen,
-  CheckCircle, AlertCircle, X,
+  CheckCircle, AlertCircle, X, EyeOff, Eye,
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -72,7 +72,7 @@ function ConfirmDialog({
 }
 
 export default function Sidebar() {
-  const { feeds, groups, filter, setFilter, loadFeeds, deleteFeed, deleteGroup, setSidebarOpen } = useStore();
+  const { feeds, groups, filter, setFilter, loadFeeds, deleteFeed, deleteGroup, updateFeed, setSidebarOpen } = useStore();
   const navigate = useNavigate();
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -80,7 +80,8 @@ export default function Sidebar() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'feed' | 'group'; id: string; name: string } | null>(null);
 
-  const totalUnread = feeds.reduce((s, f) => s + (f.unreadCount || 0), 0);
+  // 隐藏的订阅源不计入总未读徽章
+  const totalUnread = feeds.reduce((s, f) => s + (f.isHidden ? 0 : (f.unreadCount || 0)), 0);
 
   function showToast(msg: string, type: 'success' | 'error') {
     setToast({ msg, type });
@@ -131,6 +132,16 @@ export default function Sidebar() {
   function handleDeleteGroup(id: string, name: string, e: React.MouseEvent) {
     e.stopPropagation();
     setConfirmDelete({ type: 'group', id, name });
+  }
+
+  async function handleToggleHidden(feedId: string, currentHidden: boolean, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      await updateFeed(feedId, { isHidden: !currentHidden });
+      showToast(!currentHidden ? '已隐藏，文章列表不再显示该订阅源' : '已取消隐藏', 'success');
+    } catch {
+      showToast('操作失败，请重试', 'error');
+    }
   }
 
   async function doConfirmDelete() {
@@ -194,7 +205,7 @@ export default function Sidebar() {
         {/* Groups */}
         {groups.map((group) => {
           const gFeeds = groupedFeeds(group.id);
-          const gUnread = gFeeds.reduce((s, f) => s + (f.unreadCount || 0), 0);
+          const gUnread = gFeeds.reduce((s, f) => s + (f.isHidden ? 0 : (f.unreadCount || 0)), 0);
           const expanded = expandedGroups.has(group.id);
           return (
             <div key={group.id}>
@@ -241,6 +252,7 @@ export default function Sidebar() {
                       onSelect={() => nav({ type: 'feed', feedId: feed.id })}
                       onRefresh={(e) => handleRefresh(feed.id, e)}
                       onDelete={(e) => handleDeleteFeed(feed.id, feed.title, e)}
+                      onToggleHidden={(e) => handleToggleHidden(feed.id, feed.isHidden, e)}
                     />
                   ))}
                 </div>
@@ -259,6 +271,7 @@ export default function Sidebar() {
             onSelect={() => nav({ type: 'feed', feedId: feed.id })}
             onRefresh={(e) => handleRefresh(feed.id, e)}
             onDelete={(e) => handleDeleteFeed(feed.id, feed.title, e)}
+            onToggleHidden={(e) => handleToggleHidden(feed.id, feed.isHidden, e)}
           />
         ))}
       </nav>
@@ -331,12 +344,13 @@ function Badge({ count, active }: { count: number; active: boolean }) {
   );
 }
 
-function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete }: {
-  feed: { id: string; title: string; url: string; siteUrl?: string | null; favicon?: string | null; unreadCount: number };
+function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete, onToggleHidden }: {
+  feed: { id: string; title: string; url: string; siteUrl?: string | null; favicon?: string | null; unreadCount: number; isHidden: boolean };
   active: boolean; refreshing: boolean;
   onSelect: () => void;
   onRefresh: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
+  onToggleHidden: (e: React.MouseEvent) => void;
 }) {
   return (
     <div
@@ -344,15 +358,16 @@ function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete }: {
         'group flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-all duration-200',
         active
           ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_4px_12px_-2px_rgba(93,112,82,0.25)]'
-          : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]'
+          : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]',
+        feed.isHidden && !active && 'opacity-40'
       )}
       onClick={onSelect}
     >
       <FeedIcon favicon={feed.favicon} siteUrl={feed.siteUrl} url={feed.url} title={feed.title} className="w-4 h-4" />
       <span className="flex-1 truncate text-[13px] min-w-0">{feed.title}</span>
 
-      {/* 未读数：非活跃且无 hover 时显示 */}
-      {feed.unreadCount > 0 && !active && (
+      {/* 未读数：非活跃且无 hover 时显示（隐藏源不显示未读数） */}
+      {feed.unreadCount > 0 && !active && !feed.isHidden && (
         <span className="text-[11px] font-bold text-[#C18C5D] flex-shrink-0 group-hover:hidden">
           {feed.unreadCount}
         </span>
@@ -369,6 +384,16 @@ function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete }: {
           title="刷新"
         >
           <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
+        </button>
+        <button
+          onClick={onToggleHidden}
+          className={cn(
+            'p-1 rounded-full transition-all duration-150',
+            active ? 'hover:bg-[#F3F4F1]/20 text-[#F3F4F1]/80' : 'hover:bg-[#5D7052]/15 text-[#78786C] hover:text-[#5D7052]'
+          )}
+          title={feed.isHidden ? '取消隐藏' : '隐藏订阅源'}
+        >
+          {feed.isHidden ? <Eye size={11} /> : <EyeOff size={11} />}
         </button>
         <button
           onClick={onDelete}

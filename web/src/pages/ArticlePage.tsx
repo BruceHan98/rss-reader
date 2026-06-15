@@ -17,7 +17,7 @@ export default function ArticlePage() {
       articleId={id}
       onBack={() => navigate(-1)}
       onRead={(articleId, feedId) => {
-        markArticleRead(articleId, true, feedId).catch(() => {});
+        markArticleRead(articleId, true, feedId, true).catch(() => {});
         window.dispatchEvent(new CustomEvent('article-read', { detail: { articleId } }));
       }}
     />

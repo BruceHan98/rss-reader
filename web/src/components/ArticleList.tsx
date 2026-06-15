@@ -440,8 +440,8 @@ export default function ArticleList() {
       // 先把带 isRead:true 的文章写入详情缓存，确保 ArticleReader 加载时读到的是最新已读状态
       // 避免因竞态导致 ArticleReader 的 onRead 回调被重复触发（从而重复扣减 unreadCount）
       cacheArticle({ ...article, isRead: true });
-      // 发起后端已读标记，成功后 dispatch 事件更新列表
-      api.markRead(article.id).then(() => {
+      // 发起后端已读标记（opened=true：用户实际点进去打开，记录到 opened_at 供阅读统计使用）
+      api.markRead(article.id, true, true).then(() => {
         window.dispatchEvent(new CustomEvent('article-read', { detail: { articleId: article.id } }));
       }).catch(() => {});
     }
@@ -721,6 +721,7 @@ export default function ArticleList() {
                   article={article}
                   selected={selectedArticleId === article.id}
                   onSelect={() => handleSelect(article)}
+                  suppressReadStyle={filter.type === 'starred'}
                 />
               ))}
             </div>
@@ -757,11 +758,12 @@ export default function ArticleList() {
 
 function 
 ArticleItem({
-  article, selected, onSelect,
+  article, selected, onSelect, suppressReadStyle = false,
 }: {
   article: Article;
   selected: boolean;
   onSelect: () => void;
+  suppressReadStyle?: boolean;
 }) {
   return (
     <div
@@ -775,12 +777,12 @@ ArticleItem({
           : [
               'bg-[#FEFEFA] dark:bg-[#232320] border-[#DED8CF]/40 dark:border-[#3A3830]/60',
               'lg:hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.1)] lg:hover:border-[#DED8CF]/70 dark:lg:hover:border-[#3A3830]/80',
-              !article.isRead && 'border-l-2 border-l-[#5D7052]/50',
+              !suppressReadStyle && !article.isRead && 'border-l-2 border-l-[#5D7052]/50',
             ],
       )}
     >
       {/* Unread dot */}
-      {!article.isRead && !selected && (
+      {!suppressReadStyle && !article.isRead && !selected && (
         <span className="absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-[#5D7052]" />
       )}
 
@@ -802,7 +804,7 @@ ArticleItem({
       <h3
         className={cn(
           'text-[15px] leading-snug mb-1 line-clamp-2',
-          article.isRead
+          !suppressReadStyle && article.isRead
             ? 'text-[#78786C] dark:text-[#5A5850] font-normal'
             : 'text-[#2C2C24] dark:text-[#E8E6DF] font-semibold'
         )}

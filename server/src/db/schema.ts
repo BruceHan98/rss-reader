@@ -23,6 +23,7 @@ export const feeds = sqliteTable('feeds', {
   lastFetchedAt: text('last_fetched_at'),
   fetchInterval: integer('fetch_interval').notNull().default(60),
   errorCount: integer('error_count').notNull().default(0),
+  isHidden: integer('is_hidden', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull(),
 });
 
@@ -42,6 +43,7 @@ export const articles = sqliteTable('articles', {
   aiScore: integer('ai_score'),
   aiTags: text('ai_tags'),
   readAt: text('read_at'),
+  openedAt: text('opened_at'),
   createdAt: text('created_at').notNull(),
 });
 

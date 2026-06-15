@@ -95,10 +95,14 @@ sqlite.exec(`
   );
 `);
 
+// 当 feeds 表已存在时，尝试添加新列（如已存在则忽略）
+try { sqlite.exec('ALTER TABLE feeds ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0'); } catch {}
+
 // 当 articles 表已存在时，尝试添加新列（如已存在则忽略）
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN ai_score INTEGER'); } catch {}
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN ai_tags TEXT'); } catch {}
 try { sqlite.exec('ALTER TABLE articles ADD COLUMN read_at TEXT'); } catch {}
+try { sqlite.exec('ALTER TABLE articles ADD COLUMN opened_at TEXT'); } catch {}
 // 生成列：统一排序字段，避免每次查询都用 COALESCE 表达式做全表临时排序
 try { sqlite.exec("ALTER TABLE articles ADD COLUMN effective_date TEXT GENERATED ALWAYS AS (COALESCE(published_at, created_at)) VIRTUAL"); } catch {}
 // ai_score 索引需在列存在后创建
