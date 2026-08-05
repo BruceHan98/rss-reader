@@ -130,7 +130,7 @@ export function cacheArticle(article: Article) {
 
 // 携带 HTTP 状态码的错误类，让调用方可精确判断是否为 401
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public code?: string) {
+  constructor(public status: number, message: string, public code?: string, public articleCount?: number) {
     super(message);
     this.name = 'ApiError';
   }
@@ -149,7 +149,7 @@ async function request<T>(url: string, options?: RequestInit & { skipUnauthorize
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new ApiError(res.status, err.error || res.statusText, err.code);
+    throw new ApiError(res.status, err.error || res.statusText, err.code, err.articleCount);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -253,10 +253,12 @@ export const api = {
   aiTest: () => request<{ ok: boolean; error?: string }>('/ai/test', { method: 'POST' }),
 
   // Digest（AI 日报）
-  getDigest: (date?: string, force?: boolean) => {
+  // generate=false（默认）时仅读取缓存，不触发 LLM 生成；generate=true 在无缓存时才会生成；force=true 强制重新生成
+  getDigest: (date?: string, opts?: { generate?: boolean; force?: boolean }) => {
     const q = new URLSearchParams();
     if (date) q.set('date', date);
-    if (force) q.set('force', 'true');
+    if (opts?.force) q.set('force', 'true');
+    else if (opts?.generate) q.set('generate', 'true');
     const qs = q.toString();
     return request<DigestResult>(`/digest${qs ? `?${qs}` : ''}`);
   },

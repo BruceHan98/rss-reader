@@ -319,10 +319,20 @@
   button, a {
     -webkit-tap-highlight-color: transparent;
   }
-  /* 移动端小屏下默认字重偏细，适当加粗正文提升可读性 */
+  /* 移动端小屏下：
+     1. 默认字重偏细，适当加粗正文提升可读性；
+     2. 中文改用系统无衬线字体（而非 Nunito，其不含中文字形会 fallback 到系统字体），
+        避免中英文数字混排时因字体来源不同导致粗细/字形不协调，看起来"字体不统一" */
   @media (max-width: 767px) {
     body {
+      font-family: -apple-system, 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', system-ui, sans-serif;
       font-weight: 500;
+    }
+    /* 文章列表卡片标题默认继承全局 h1-h4 的衬线字体（Fraunces/Songti SC），
+       与卡片内来源名、摘要等无衬线正文风格不一致，小屏下显得混乱；
+       改为与卡片其余文字一致的系统无衬线字体，让整张卡片风格统一协调 */
+    .article-card-title {
+      font-family: -apple-system, 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', system-ui, sans-serif;
     }
   }
 }

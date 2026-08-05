@@ -34,9 +34,12 @@ interface StoredCategory {
 }
 
 // 单次日报最多纳入的文章数：避免超长内容消耗过多 token / 超出上下文窗口
-const MAX_ARTICLES = 80;
-// 每篇文章正文摘录的词数上限
-const PER_ARTICLE_WORDS = 120;
+const MAX_ARTICLES = 120;
+// 单篇文章正文摘录词数的上下限，实际取值随采样文章数动态调整（文章越多单篇越短），保持总输入量大致恒定
+const PER_ARTICLE_WORDS_MAX = 150;
+const PER_ARTICLE_WORDS_MIN = 40;
+// 期望的文章内容总词数预算（不含 prompt 模板本身），用于反推每篇截断长度
+const TOTAL_WORDS_BUDGET = 6000;
 
 interface ArticleRow {
   id: string;
@@ -47,25 +50,69 @@ interface ArticleRow {
   ai_score: number | null;
 }
 
+/**
+ * 获取当天全部文章后，按订阅源分桶做轮询（round-robin）采样：
+ * 每轮从每个 feed 里各取一篇（feed 内部按 ai_score/时间排序），直到达到 MAX_ARTICLES 或文章耗尽。
+ * 相比直接按分数/时间全局排序取前 N 篇，能避免单个高产订阅源挤占名额，保证覆盖面更全面。
+ */
 function getArticlesForDate(date: string): ArticleRow[] {
   // effective_date 形如 ISO 字符串，用 date(...) 截取日期部分做匹配，兼容本地时区存储的 published_at
   const rows = sqlite
     .prepare(
-      `SELECT a.id, a.title, a.summary, a.content, f.title as feed_title, a.ai_score
+      `SELECT a.id, a.title, a.summary, a.content, a.feed_id, f.title as feed_title, a.ai_score
        FROM articles a
        JOIN feeds f ON f.id = a.feed_id
        WHERE date(a.effective_date) = ?
-       ORDER BY (a.ai_score IS NULL), a.ai_score DESC, a.effective_date DESC
-       LIMIT ?`
+       ORDER BY (a.ai_score IS NULL), a.ai_score DESC, a.effective_date DESC`
     )
-    .all(date, MAX_ARTICLES) as ArticleRow[];
-  return rows;
+    .all(date) as Array<ArticleRow & { feed_id: string }>;
+
+  if (rows.length <= MAX_ARTICLES) return rows;
+
+  // 按 feed 分桶，桶内已保持原排序（分数优先）
+  const byFeed = new Map<string, ArticleRow[]>();
+  for (const r of rows) {
+    const list = byFeed.get(r.feed_id);
+    if (list) list.push(r);
+    else byFeed.set(r.feed_id, [r]);
+  }
+  const buckets = [...byFeed.values()];
+
+  const picked: ArticleRow[] = [];
+  let round = 0;
+  while (picked.length < MAX_ARTICLES) {
+    let addedInRound = 0;
+    for (const bucket of buckets) {
+      if (picked.length >= MAX_ARTICLES) break;
+      if (round < bucket.length) {
+        picked.push(bucket[round]);
+        addedInRound++;
+      }
+    }
+    if (addedInRound === 0) break; // 所有 feed 的文章都已取完
+    round++;
+  }
+  return picked;
+}
+
+function countArticlesForDate(date: string): number {
+  const row = sqlite
+    .prepare(`SELECT COUNT(*) as cnt FROM articles a WHERE date(a.effective_date) = ?`)
+    .get(date) as { cnt: number };
+  return row.cnt;
 }
 
 function buildPrompt(rows: ArticleRow[]): string {
+  // 采样文章越多，单篇截断越短，使总输入词数大致维持在预算内，兼顾全面性与 token 消耗
+  const perArticleWords = Math.max(
+    PER_ARTICLE_WORDS_MIN,
+    Math.min(PER_ARTICLE_WORDS_MAX, Math.round(TOTAL_WORDS_BUDGET / Math.max(1, rows.length)))
+  );
   const list = rows
     .map((r, i) => {
-      const text = truncateWords((r.summary || '') + '\n' + (r.content || ''), PER_ARTICLE_WORDS);
+      // 优先使用摘要（已是精炼文本），仅在没有摘要时才截取正文，减少冗余内容消耗 token
+      const source = r.summary || r.content || '';
+      const text = truncateWords(source, perArticleWords);
       return `[${i + 1}] (来源: ${r.feed_title})\n标题：${r.title}\n内容：${text}`;
     })
     .join('\n\n');
@@ -175,19 +222,38 @@ function saveDigest(userId: string, date: string, categories: StoredCategory[], 
 }
 
 export class DigestError extends Error {
-  constructor(message: string, public code: 'NO_ARTICLES' | 'NO_API_KEY' | 'LLM_ERROR') {
+  constructor(message: string, public code: 'NO_ARTICLES' | 'NO_API_KEY' | 'LLM_ERROR' | 'NOT_GENERATED') {
     super(message);
   }
 }
 
 /**
+ * 查询指定日期是否已有缓存日报，以及当天文章数（用于前端展示"生成"确认提示，不触发 LLM 调用）。
+ */
+export function peekDigest(userId: string, date: string): { cached: DigestResult | null; articleCount: number } {
+  const cached = getCachedDigest(userId, date);
+  const articleCount = cached ? cached.articleCount : countArticlesForDate(date);
+  return { cached, articleCount };
+}
+
+/**
  * 生成（或读取缓存的）指定日期日报。
  * force=true 时跳过缓存直接重新生成。
+ * generate=false 时若无缓存则直接抛出 NOT_GENERATED，不调用 LLM（避免 token 浪费，需用户主动确认生成）。
  */
-export async function getOrGenerateDigest(userId: string, date: string, force = false): Promise<DigestResult> {
+export async function getOrGenerateDigest(
+  userId: string,
+  date: string,
+  force = false,
+  generate = true
+): Promise<DigestResult> {
   if (!force) {
     const cached = getCachedDigest(userId, date);
     if (cached) return cached;
+  }
+
+  if (!generate) {
+    throw new DigestError('日报尚未生成', 'NOT_GENERATED');
   }
 
   const rows = getArticlesForDate(date);

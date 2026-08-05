@@ -4,7 +4,7 @@ import { format, addDays, isToday } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { api, ApiError, type DigestResult, type DigestItem } from '../lib/api';
 import { cn } from '../lib/utils';
-import { ChevronLeft, ChevronRight, Loader2, Newspaper, RefreshCw, AlertCircle, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Newspaper, RefreshCw, AlertCircle, Settings, Sparkles } from 'lucide-react';
 
 function todayStr(): string {
   return format(new Date(), 'yyyy-MM-dd');
@@ -18,29 +18,56 @@ export default function DigestPage() {
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // 当天尚未生成日报时，展示确认生成的提示（避免自动调用 LLM 浪费 token）
+  const [notGenerated, setNotGenerated] = useState<{ articleCount: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setDigest(null);
+    setNotGenerated(null);
+    // 仅读取缓存，不触发生成
     api.getDigest(date)
       .then((d) => { if (!cancelled) setDigest(d); })
       .catch((err) => {
         if (cancelled) return;
-        if (err instanceof ApiError) setError({ message: err.message, code: err.code });
-        else setError({ message: '加载失败，请重试' });
+        if (err instanceof ApiError && err.code === 'NOT_GENERATED') {
+          setNotGenerated({ articleCount: err.articleCount ?? 0 });
+        } else if (err instanceof ApiError) {
+          setError({ message: err.message, code: err.code });
+        } else {
+          setError({ message: '加载失败，请重试' });
+        }
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [date]);
 
+  // 用户确认后才真正生成（首次生成或未生成状态下点击「生成日报」）
+  async function handleGenerate() {
+    if (regenerating) return;
+    setRegenerating(true);
+    setError(null);
+    try {
+      const d = await api.getDigest(date, { generate: true });
+      setDigest(d);
+      setNotGenerated(null);
+    } catch (err) {
+      if (err instanceof ApiError) setError({ message: err.message, code: err.code });
+      else setError({ message: '生成失败，请重试' });
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  // 重新生成（已存在日报时，强制刷新）
   async function handleRegenerate() {
     if (regenerating) return;
     setRegenerating(true);
     setError(null);
     try {
-      const d = await api.getDigest(date, true);
+      const d = await api.getDigest(date, { force: true });
       setDigest(d);
     } catch (err) {
       if (err instanceof ApiError) setError({ message: err.message, code: err.code });
@@ -106,7 +133,30 @@ export default function DigestPage() {
         {(loading || regenerating) && (
           <div className="flex flex-col items-center justify-center h-full min-h-[16rem] gap-3 text-[#78786C]">
             <Loader2 size={24} className="animate-spin text-[#5D7052]" />
-            <p className="text-xs text-[#78786C]/70">{regenerating ? '正在重新生成日报…' : '正在生成日报，请稍候…'}</p>
+            <p className="text-xs text-[#78786C]/70">{regenerating ? '正在生成日报，请稍候…' : '加载中…'}</p>
+          </div>
+        )}
+
+        {!loading && !regenerating && !error && notGenerated && (
+          <div className="flex flex-col items-center justify-center h-full min-h-[20rem] gap-4 text-[#78786C] px-6 text-center">
+            <div className="w-20 h-20 rounded-[40%_60%_60%_40%_/_40%_40%_60%_60%] bg-[#5D7052]/10 dark:bg-[#2E2B25] flex items-center justify-center">
+              <Newspaper size={26} className="text-[#5D7052]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#4A4A40] dark:text-[#B0ADA3]">{dateLabel}还没有生成日报</p>
+              {notGenerated.articleCount > 0 ? (
+                <p className="text-xs text-[#78786C]/60 mt-1">
+                  当天共 {notGenerated.articleCount} 篇文章，生成将消耗一定 AI 用量
+                </p>
+              ) : (
+                <p className="text-xs text-[#78786C]/60 mt-1">换个日期试试，或先刷新订阅源</p>
+              )}
+            </div>
+            {notGenerated.articleCount > 0 && (
+              <button onClick={handleGenerate} className="btn-primary inline-flex items-center gap-1.5">
+                <Sparkles size={13} /> 生成日报
+              </button>
+            )}
           </div>
         )}
 
@@ -126,7 +176,7 @@ export default function DigestPage() {
             ) : error.code === 'NO_ARTICLES' ? (
               <p className="text-xs text-[#78786C]/60">换个日期试试，或先刷新订阅源</p>
             ) : (
-              <button onClick={handleRegenerate} className="btn-secondary">重试</button>
+              <button onClick={handleGenerate} className="btn-secondary">重试</button>
             )}
           </div>
         )}
@@ -147,7 +197,7 @@ export default function DigestPage() {
             </div>
 
             {digest.categories.map((cat, ci) => (
-              <div key={ci} className="card-organic p-4">
+              <div key={ci} className="card-organic !rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5D7052] flex-shrink-0" />
                   <h3 className="font-heading font-semibold text-sm text-[#2C2C24] dark:text-[#E8E6DF]">{cat.name}</h3>
