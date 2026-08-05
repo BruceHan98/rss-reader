@@ -53,7 +53,7 @@ export function cancelJob(jobId: string): { cancelled: boolean; processed: numbe
   return { cancelled: true, processed: job.processed };
 }
 
-function getSettings(userId?: string): Record<string, string> {
+export function getSettings(userId?: string): Record<string, string> {
   // 优先使用传入的 userId，否则降级使用 admin 用户配置
   const uid = userId || (() => {
     const row = sqlite.prepare("SELECT id FROM users WHERE username = 'admin'").get() as any;
@@ -68,7 +68,7 @@ function getSettings(userId?: string): Record<string, string> {
 }
 
 /** 取文本前 N 词（英文按空白分词，中文每字一词），避免超长内容消耗过多 token */
-function truncateWords(text: string, maxWords = 1000): string {
+export function truncateWords(text: string, maxWords = 1000): string {
   // 将中文字符逐字拆分，英文/数字保持整词
   const tokens: string[] = [];
   // 用正则将连续非中文片段和中文字符分别提取
@@ -87,11 +87,12 @@ function truncateWords(text: string, maxWords = 1000): string {
   return tokens.slice(0, maxWords).join(' ');
 }
 
-async function callLLM(
+export async function callLLM(
   baseUrl: string,
   apiKey: string,
   model: string,
-  prompt: string
+  prompt: string,
+  opts?: { temperature?: number; maxTokens?: number; timeoutMs?: number }
 ): Promise<{ content: string; tokens: number }> {
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -102,10 +103,10 @@ async function callLLM(
     body: JSON.stringify({
       model,
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      max_tokens: 4096,
+      temperature: opts?.temperature ?? 0.1,
+      max_tokens: opts?.maxTokens ?? 4096,
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(opts?.timeoutMs ?? 30000),
   });
   if (!res.ok) throw new Error(`LLM API error: ${res.status}`);
   const data = await res.json() as any;
@@ -123,7 +124,7 @@ async function callLLM(
   return { content, tokens };
 }
 
-function addTokensUsed(delta: number, userId: string): void {
+export function addTokensUsed(delta: number, userId: string): void {
   if (delta <= 0) return;
   // 用 SQL 原子自增，避免并发时的读写竞态
   sqlite

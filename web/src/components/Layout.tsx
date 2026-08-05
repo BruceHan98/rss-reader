@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import Sidebar from './Sidebar';
 import AiProgressFloat from './AiProgressFloat';
-import { ChevronLeft, ChevronRight, Inbox, BookOpen, Search, Settings2, Rss } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Inbox, BookOpen, Search, Settings2, Rss, Newspaper } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -91,6 +91,12 @@ export default function Layout({ children }: { children: ReactNode }) {
               label="未读"
               active={location.pathname === '/' && filter.type === 'unread'}
               onClick={() => navTo('unread', '/')}
+            />
+            <BottomTabItem
+              icon={<Newspaper size={18} />}
+              label="日报"
+              active={location.pathname === '/digest'}
+              onClick={() => navigate('/digest')}
             />
             <BottomTabItem
               icon={<Search size={18} />}

@@ -319,4 +319,10 @@
   button, a {
     -webkit-tap-highlight-color: transparent;
   }
+  /* 移动端小屏下默认字重偏细，适当加粗正文提升可读性 */
+  @media (max-width: 767px) {
+    body {
+      font-weight: 500;
+    }
+  }
 }

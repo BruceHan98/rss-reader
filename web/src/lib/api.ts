@@ -60,6 +60,32 @@ export interface AiTag {
   count: number;
 }
 
+export interface DigestArticleRef {
+  id: string;
+  title: string;
+  feedTitle: string;
+  isRead: boolean;
+}
+
+export interface DigestItem {
+  title: string;
+  summary: string;
+  articleIds: string[];
+  articles: DigestArticleRef[];
+}
+
+export interface DigestCategory {
+  name: string;
+  items: DigestItem[];
+}
+
+export interface DigestResult {
+  date: string;
+  categories: DigestCategory[];
+  articleCount: number;
+  generatedAt: string;
+}
+
 export interface ArticleList {
   articles: Article[];
   total: number;
@@ -104,7 +130,7 @@ export function cacheArticle(article: Article) {
 
 // 携带 HTTP 状态码的错误类，让调用方可精确判断是否为 401
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
     this.name = 'ApiError';
   }
@@ -123,7 +149,7 @@ async function request<T>(url: string, options?: RequestInit & { skipUnauthorize
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new ApiError(res.status, err.error || res.statusText);
+    throw new ApiError(res.status, err.error || res.statusText, err.code);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -196,8 +222,8 @@ export const api = {
     if (cached) articleDetailCache.set(id, { ...cached, isReadLater: res.isReadLater });
     return res;
   },
-  markAllRead: (params?: { feedId?: string; groupId?: string }) =>
-    request<void>('/articles/mark-all-read', { method: 'POST', body: JSON.stringify(params || {}) }),
+  markAllRead: (params?: { feedId?: string; groupId?: string; olderThanDays?: number }) =>
+    request<{ count: number }>('/articles/mark-all-read', { method: 'POST', body: JSON.stringify(params || {}) }),
 
   // Search
   search: (params: { q: string; from?: string; to?: string; feedId?: string; isRead?: string }) => {
@@ -225,6 +251,15 @@ export const api = {
     request<{ cancelled: boolean; processed: number }>(`/ai/analyze/${jobId}`, { method: 'DELETE' }),
   getAiTags: () => request<{ tags: AiTag[] }>('/ai/tags'),
   aiTest: () => request<{ ok: boolean; error?: string }>('/ai/test', { method: 'POST' }),
+
+  // Digest（AI 日报）
+  getDigest: (date?: string, force?: boolean) => {
+    const q = new URLSearchParams();
+    if (date) q.set('date', date);
+    if (force) q.set('force', 'true');
+    const qs = q.toString();
+    return request<DigestResult>(`/digest${qs ? `?${qs}` : ''}`);
+  },
 
   // OPML
   importOpml: (file: File) => {

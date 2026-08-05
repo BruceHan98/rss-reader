@@ -16,6 +16,15 @@ const READER_STYLES = `
     font-size: 1rem;
     line-height: 1.8;
   }
+  /* 移动端：中文衬线字体（苹方宋体/思源宋体等）在各机型上可用性不一致、笔画偏细，
+     改用系统默认无衬线黑体（iOS 苹方 / 安卓 Noto Sans CJK、MiSans、HarmonyOS Sans 等），
+     英文数字仍保留衬线字体风格 */
+  @media (max-width: 767px) {
+    .article-body {
+      font-family: 'Fraunces', 'Georgia', -apple-system, 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', sans-serif;
+      font-weight: 500;
+    }
+  }
   .dark .article-body { color: #E8E6DF; }
   .article-body h1,
   .article-body h2,

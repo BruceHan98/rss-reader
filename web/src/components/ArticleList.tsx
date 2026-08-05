@@ -34,6 +34,8 @@ export default function ArticleList() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<AiTag[]>([]);
   const [showTagFilter, setShowTagFilter] = useState(false);
+  const [showMarkReadMenu, setShowMarkReadMenu] = useState(false);
+  const markReadMenuRef = useRef<HTMLDivElement>(null);
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [total, setTotal] = useState(0);
@@ -96,6 +98,18 @@ export default function ArticleList() {
   useEffect(() => {
     api.getAiTags().then((r) => setAllTags(r.tags)).catch(() => {});
   }, []);
+
+  // 点击「标为已读」下拉菜单外部时关闭
+  useEffect(() => {
+    if (!showMarkReadMenu) return;
+    function onDocClick(e: MouseEvent) {
+      if (markReadMenuRef.current && !markReadMenuRef.current.contains(e.target as Node)) {
+        setShowMarkReadMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showMarkReadMenu]);
 
   // 监听文章被阅读事件，更新本地列表 isRead 状态
   useEffect(() => {
@@ -490,18 +504,46 @@ export default function ArticleList() {
     }
   }
 
-  async function handleMarkAllRead() {
-    const params =
+  async function handleMarkAllRead(olderThanDays?: number) {
+    const base =
       filter.type === 'feed' ? { feedId: filter.feedId } :
-      filter.type === 'group' ? { groupId: filter.groupId } : undefined;
-    await markAllRead(params);
-    setArticles((prev) => prev.map((a) => ({ ...a, isRead: true })));
-    setDisplayTotal(0);
-    displayTotalCacheRef.current.set(getFilterKey(filter), 0);
-    if (filter.type === 'unread') {
-      setTotal(0);
-      setHasMore(false);
+      filter.type === 'group' ? { groupId: filter.groupId } : {};
+    const params = olderThanDays ? { ...base, olderThanDays } : base;
+    const count = await markAllRead(Object.keys(params).length ? params : undefined);
+    setShowMarkReadMenu(false);
+
+    if (!olderThanDays) {
+      // 全部已读：直接清空当前列表未读态
+      setArticles((prev) => prev.map((a) => ({ ...a, isRead: true })));
+      setDisplayTotal(0);
+      displayTotalCacheRef.current.set(getFilterKey(filter), 0);
+      if (filter.type === 'unread') {
+        setTotal(0);
+        setHasMore(false);
+      }
+    } else {
+      // 仅标记 N 天前的文章：只更新符合条件的文章，保留最近文章的未读状态
+      const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+      setArticles((prev) =>
+        prev.map((a) => {
+          if (a.isRead) return a;
+          const ts = a.effectiveDate ?? a.publishedAt;
+          if (ts && new Date(ts).getTime() < cutoff) return { ...a, isRead: true };
+          return a;
+        })
+      );
+      setDisplayTotal((prev) => {
+        const next = Math.max(0, prev - count);
+        displayTotalCacheRef.current.set(getFilterKey(filter), next);
+        return next;
+      });
+      if (filter.type === 'unread') {
+        setTotal((prev) => Math.max(0, prev - count));
+        // 未读列表中已标记的文章需要从当前视图移除
+        setArticles((prev) => prev.filter((a) => !a.isRead));
+      }
     }
+    showToast(count > 0 ? `已标记 ${count} 篇文章为已读` : '没有符合条件的未读文章', count > 0 ? 'success' : 'error');
   }
 
   function toggleTag(tag: string) {
@@ -603,14 +645,41 @@ export default function ArticleList() {
             >
               <Sparkles size={13} />
             </button>
-            {/* 全部标记已读 */}
-            <button
-              onClick={handleMarkAllRead}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0"
-              title="全部标为已读"
-            >
-              <CheckCheck size={14} />
-            </button>
+            {/* 全部标记已读（含按时间批量已读） */}
+            <div className="relative" ref={markReadMenuRef}>
+              <button
+                onClick={() => setShowMarkReadMenu((v) => !v)}
+                className={cn(
+                  'w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 flex-shrink-0',
+                  showMarkReadMenu
+                    ? 'bg-[#5D7052]/15 text-[#5D7052]'
+                    : 'text-[#78786C]/60 hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
+                )}
+                title="标为已读"
+              >
+                <CheckCheck size={14} />
+              </button>
+              {showMarkReadMenu && (
+                <div className="absolute right-0 top-full mt-1.5 bg-[#FEFEFA] dark:bg-[#252420] border border-[#DED8CF]/60 rounded-2xl shadow-[0_8px_24px_-4px_rgba(93,112,82,0.15)] z-50 overflow-hidden min-w-[9.5rem]">
+                  <button
+                    onClick={() => handleMarkAllRead()}
+                    className="flex items-center w-full px-4 py-2 text-xs font-semibold text-[#78786C] hover:bg-[#F0EBE5] dark:hover:bg-[#2E2B25] transition-colors whitespace-nowrap"
+                  >
+                    全部标为已读
+                  </button>
+                  <div className="h-px bg-[#DED8CF]/60 dark:bg-[#3A3830] mx-2" />
+                  {[3, 7, 14].map((days) => (
+                    <button
+                      key={days}
+                      onClick={() => handleMarkAllRead(days)}
+                      className="flex items-center w-full px-4 py-2 text-xs font-semibold text-[#78786C] hover:bg-[#F0EBE5] dark:hover:bg-[#2E2B25] transition-colors whitespace-nowrap"
+                    >
+                      {days} 天前的标为已读
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

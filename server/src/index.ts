@@ -14,6 +14,7 @@ import { searchRoutes } from './routes/search.js';
 import { opmlRoutes } from './routes/opml.js';
 import { settingsRoutes } from './routes/settings.js';
 import { aiRoutes } from './routes/ai.js';
+import { digestRoutes } from './routes/digest.js';
 import { authRoutes } from './routes/auth.js';
 import { startScheduler } from './services/scheduler.js';
 
@@ -81,6 +82,7 @@ await app.register(searchRoutes);
 await app.register(opmlRoutes);
 await app.register(settingsRoutes);
 await app.register(aiRoutes);
+await app.register(digestRoutes);
 
 app.get('/api/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
 

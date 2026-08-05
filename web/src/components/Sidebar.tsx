@@ -7,7 +7,7 @@ import AddFeedModal from './AddFeedModal';
 import FeedIcon from './FeedIcon';
 import {
   Rss, Star, Clock, Search, Settings, ChevronDown, ChevronRight,
-  Plus, RefreshCw, Trash2, Inbox, BookOpen,
+  Plus, RefreshCw, Trash2, Inbox, BookOpen, Newspaper,
   CheckCircle, AlertCircle, X, EyeOff, Eye,
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -278,6 +278,13 @@ export default function Sidebar() {
 
       <div className="mx-4 h-px bg-[#DED8CF]/60 dark:bg-[#3A3830]/60" />
       <div className="px-2.5 py-2 flex gap-1">
+        <button
+          onClick={() => navigate('/digest', { replace: true })}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052]"
+        >
+          <Newspaper size={13} />
+          <span className="font-medium">日报</span>
+        </button>
         <button
           onClick={() => { setFilter({ type: 'all' }); navigate('/search', { replace: true }); }}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052]"

@@ -44,7 +44,7 @@ interface AppState {
   markArticleRead: (id: string, isRead?: boolean, feedId?: string, opened?: boolean) => Promise<void>;
   toggleStar: (id: string) => Promise<{ isStarred: boolean }>;
   toggleReadLater: (id: string) => Promise<{ isReadLater: boolean }>;
-  markAllRead: (params?: { feedId?: string; groupId?: string }) => Promise<void>;
+  markAllRead: (params?: { feedId?: string; groupId?: string; olderThanDays?: number }) => Promise<number>;
 }
 
 function loadFilterFromSession(): Filter {
@@ -176,8 +176,9 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   markAllRead: async (params) => {
-    await api.markAllRead(params);
+    const { count } = await api.markAllRead(params);
     await get().loadFeeds();
+    return count;
   },
 }));
 

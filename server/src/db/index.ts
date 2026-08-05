@@ -93,6 +93,15 @@ sqlite.exec(`
     value TEXT NOT NULL,
     PRIMARY KEY (user_id, key)
   );
+
+  CREATE TABLE IF NOT EXISTS daily_digests (
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    content TEXT NOT NULL,
+    article_count INTEGER NOT NULL DEFAULT 0,
+    generated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, date)
+  );
 `);
 
 // 当 feeds 表已存在时，尝试添加新列（如已存在则忽略）

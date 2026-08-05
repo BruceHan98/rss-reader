@@ -195,23 +195,35 @@ export async function articleRoutes(app: FastifyInstance) {
   });
 
   // POST /api/articles/mark-all-read
-  app.post<{ Body: { feedId?: string; groupId?: string } }>('/api/articles/mark-all-read', async (req) => {
+  // olderThanDays：仅标记「发布时间早于 N 天前」的未读文章为已读，用于清理堆积旧文章、保留最近几天继续看
+  app.post<{ Body: { feedId?: string; groupId?: string; olderThanDays?: number } }>('/api/articles/mark-all-read', async (req) => {
     const now = new Date().toISOString();
+    let where = 'is_read = 0';
+    const params: any[] = [];
+
     if (req.body?.feedId) {
-      sqlite.prepare('UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?) WHERE feed_id = ? AND is_read = 0').run(now, req.body.feedId);
+      where += ' AND feed_id = ?';
+      params.push(req.body.feedId);
     } else if (req.body?.groupId) {
       const feedIds = sqlite
         .prepare('SELECT id FROM feeds WHERE group_id = ?')
         .all(req.body.groupId)
         .map((r: any) => r.id);
-      if (feedIds.length) {
-        sqlite
-          .prepare(`UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?) WHERE feed_id IN (${feedIds.map(() => '?').join(',')}) AND is_read = 0`)
-          .run(now, ...feedIds);
-      }
-    } else {
-      sqlite.prepare('UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?) WHERE is_read = 0').run(now);
+      if (!feedIds.length) return { success: true, count: 0 };
+      where += ` AND feed_id IN (${feedIds.map(() => '?').join(',')})`;
+      params.push(...feedIds);
     }
-    return { success: true };
+
+    const days = req.body?.olderThanDays;
+    if (days !== undefined && days > 0) {
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      where += ' AND COALESCE(published_at, created_at) < ?';
+      params.push(cutoff);
+    }
+
+    const result = sqlite
+      .prepare(`UPDATE articles SET is_read = 1, read_at = COALESCE(read_at, ?) WHERE ${where}`)
+      .run(now, ...params);
+    return { success: true, count: result.changes };
   });
 }

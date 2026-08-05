@@ -6,6 +6,7 @@ import ArticleList from './components/ArticleList';
 import TimelinePage from './pages/TimelinePage';
 import ArticlePage from './pages/ArticlePage';
 import SearchPage from './pages/SearchPage';
+import DigestPage from './pages/DigestPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import { setUnauthorizedHandler, ApiError } from './lib/api';
@@ -121,7 +122,7 @@ export default function App() {
 
   // 移动端路由状态
   const isArticleRoute = location.pathname.startsWith('/article/');
-  const isSpecialRoute = location.pathname === '/search' || location.pathname === '/settings';
+  const isSpecialRoute = location.pathname === '/search' || location.pathname === '/settings' || location.pathname === '/digest';
   const showListOnMobile = !isArticleRoute && !isSpecialRoute;
 
   return (
@@ -154,6 +155,7 @@ export default function App() {
             <Route path="/" element={<TimelinePage />} />
             <Route path="/article/:id" element={<ArticlePage />} />
             <Route path="/search" element={<SearchPage />} />
+            <Route path="/digest" element={<DigestPage />} />
             <Route path="/settings" element={<SettingsPage onLogout={handleLogout} />} />
             <Route path="*" element={<TimelinePage />} />
           </Routes>

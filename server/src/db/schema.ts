@@ -53,6 +53,15 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
 });
 
+// AI 日报：按用户 + 日期缓存生成结果，避免重复调用 LLM
+export const dailyDigests = sqliteTable('daily_digests', {
+  userId: text('user_id').notNull(),
+  date: text('date').notNull(), // YYYY-MM-DD
+  content: text('content').notNull(), // JSON 字符串：{ categories: [{ name, items: [{ title, summary, articleIds }] }] }
+  articleCount: integer('article_count').notNull().default(0),
+  generatedAt: text('generated_at').notNull(),
+});
+
 export type Feed = typeof feeds.$inferSelect;
 export type NewFeed = typeof feeds.$inferInsert;
 export type Article = typeof articles.$inferSelect;
@@ -60,3 +69,4 @@ export type NewArticle = typeof articles.$inferInsert;
 export type Group = typeof groups.$inferSelect;
 export type NewGroup = typeof groups.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type DailyDigest = typeof dailyDigests.$inferSelect;
