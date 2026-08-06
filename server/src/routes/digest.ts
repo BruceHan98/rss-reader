@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getOrGenerateDigest, peekDigest, DigestError } from '../services/digest.js';
+import { getOrGenerateDigest, peekDigest, listGeneratedDates, DigestError } from '../services/digest.js';
 
 function getUserId(req: any): string {
   return (req.user as any)?.userId ?? '';
@@ -38,5 +38,15 @@ export async function digestRoutes(app: FastifyInstance) {
       }
       return reply.status(500).send({ error: '日报生成失败' });
     }
+  });
+
+  // GET /api/digest/dates?month=YYYY-MM — 查询该月已生成日报的日期列表，供日历标记
+  app.get<{ Querystring: { month?: string } }>('/api/digest/dates', async (req, reply) => {
+    const month = req.query.month;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return reply.status(400).send({ error: 'month 格式应为 YYYY-MM' });
+    }
+    const dates = listGeneratedDates(getUserId(req), month);
+    return { dates };
   });
 }

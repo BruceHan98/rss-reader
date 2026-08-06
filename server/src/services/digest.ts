@@ -237,6 +237,18 @@ export function peekDigest(userId: string, date: string): { cached: DigestResult
 }
 
 /**
+ * 查询某个月份（YYYY-MM）内已生成日报的日期列表，供日历标记使用。
+ */
+export function listGeneratedDates(userId: string, month: string): string[] {
+  const rows = sqlite
+    .prepare(
+      `SELECT date FROM daily_digests WHERE user_id = ? AND date LIKE ? ORDER BY date`
+    )
+    .all(userId, `${month}-%`) as Array<{ date: string }>;
+  return rows.map((r) => r.date);
+}
+
+/**
  * 生成（或读取缓存的）指定日期日报。
  * force=true 时跳过缓存直接重新生成。
  * generate=false 时若无缓存则直接抛出 NOT_GENERATED，不调用 LLM（避免 token 浪费，需用户主动确认生成）。

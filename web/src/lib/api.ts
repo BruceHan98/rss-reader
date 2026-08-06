@@ -262,6 +262,8 @@ export const api = {
     const qs = q.toString();
     return request<DigestResult>(`/digest${qs ? `?${qs}` : ''}`);
   },
+  // 查询某月（YYYY-MM）已生成日报的日期列表，供日历标记
+  getDigestDates: (month: string) => request<{ dates: string[] }>(`/digest/dates?month=${month}`),
 
   // OPML
   importOpml: (file: File) => {
