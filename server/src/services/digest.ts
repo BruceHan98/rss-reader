@@ -57,6 +57,8 @@ interface DigestJob extends DigestGenerationStatus {
 }
 
 const LIGHTWEIGHT_BATCH_SIZE = 80;
+const CLASSIFICATION_CONCURRENCY = 3;
+const DIGEST_MODEL = 'MiniMax-M3';
 const TITLE_MAX_WORDS = 50;
 const SUMMARY_MAX_WORDS = 24;
 // 单次轻量分类不应长时间阻塞整份日报；超时后由重试/拆批接管。
@@ -234,8 +236,13 @@ async function callDigestLlm(baseUrl: string, apiKey: string, model: string, pro
   let lastError: unknown;
   for (let attempt = 1; attempt <= DIGEST_MAX_ATTEMPTS; attempt++) {
     try {
-      // 部分推理模型会先输出较长的思考内容；保留足够输出预算，避免 JSON 在 think 块中被截断。
-      const { content, tokens } = await callLLM(baseUrl, apiKey, model, prompt, { temperature: 0.2, maxTokens: 4096, timeoutMs: DIGEST_TIMEOUT_MS });
+      const { content, tokens } = await callLLM(baseUrl, apiKey, model, prompt, {
+        temperature: 0.2,
+        maxTokens: 1024,
+        timeoutMs: DIGEST_TIMEOUT_MS,
+        // MiniMax-M3 支持关闭 thinking，日报仅需结构化轻量分类，无需推理过程。
+        extraBody: model === DIGEST_MODEL ? { thinking: { type: 'disabled' } } : undefined,
+      });
       addTokensUsed(tokens, userId);
       return content;
     } catch (error) {
@@ -314,17 +321,28 @@ async function generateDigest(
   const cfg = getSettings(userId);
   const baseUrl = (cfg.aiBaseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
   const apiKey = cfg.aiApiKey || '';
-  const model = cfg.aiModel || 'gpt-4o-mini';
+  const model = baseUrl.includes('api.minimax.io') ? DIGEST_MODEL : (cfg.aiModel || 'gpt-4o-mini');
   if (!apiKey) throw new DigestError('请先在设置页配置 AI API 密钥', 'NO_API_KEY');
 
   try {
-    const batchCategories: StoredCategory[] = [];
-    for (let start = 0; start < rows.length; start += LIGHTWEIGHT_BATCH_SIZE) {
-      const batch = rows.slice(start, start + LIGHTWEIGHT_BATCH_SIZE);
-      onProgress?.(10 + Math.round((start / rows.length) * 65), 'classifying', start, rows.length);
-      batchCategories.push(...await classifyBatch(batch, baseUrl, apiKey, model, userId));
-      onProgress?.(10 + Math.round((Math.min(start + batch.length, rows.length) / rows.length) * 65), 'classifying', Math.min(start + batch.length, rows.length), rows.length);
-    }
+    const batches = Array.from({ length: Math.ceil(rows.length / LIGHTWEIGHT_BATCH_SIZE) }, (_, index) =>
+      rows.slice(index * LIGHTWEIGHT_BATCH_SIZE, (index + 1) * LIGHTWEIGHT_BATCH_SIZE)
+    );
+    const batchResults: StoredCategory[][] = [];
+    let nextBatch = 0;
+    let processed = 0;
+    const workers = Array.from({ length: Math.min(CLASSIFICATION_CONCURRENCY, batches.length) }, async () => {
+      while (nextBatch < batches.length) {
+        const batchIndex = nextBatch++;
+        const batch = batches[batchIndex];
+        const categories = await classifyBatch(batch, baseUrl, apiKey, model, userId);
+        batchResults[batchIndex] = categories;
+        processed += batch.length;
+        onProgress?.(10 + Math.round((processed / rows.length) * 65), 'classifying', processed, rows.length);
+      }
+    });
+    await Promise.all(workers);
+    const batchCategories = batchResults.flat();
 
     const intermediate = flattenCategories(batchCategories);
     onProgress?.(80, 'merging', intermediate.length, intermediate.length);

@@ -92,7 +92,7 @@ export async function callLLM(
   apiKey: string,
   model: string,
   prompt: string,
-  opts?: { temperature?: number; maxTokens?: number; timeoutMs?: number }
+  opts?: { temperature?: number; maxTokens?: number; timeoutMs?: number; extraBody?: Record<string, unknown> }
 ): Promise<{ content: string; tokens: number }> {
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -105,6 +105,7 @@ export async function callLLM(
       messages: [{ role: 'user', content: prompt }],
       temperature: opts?.temperature ?? 0.1,
       max_tokens: opts?.maxTokens ?? 4096,
+      ...opts?.extraBody,
     }),
     signal: AbortSignal.timeout(opts?.timeoutMs ?? 30000),
   });
