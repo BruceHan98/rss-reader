@@ -22,6 +22,10 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [aiMsg, setAiMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [aiTesting, setAiTesting] = useState(false);
+  // AI 配置使用本地草稿，避免每输入一个字符就触发异步保存并用旧响应覆盖输入内容。
+  const [aiBaseUrl, setAiBaseUrl] = useState('');
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [aiModel, setAiModel] = useState('');
 
   const [pwdCurrent, setPwdCurrent] = useState('');
   const [pwdNew, setPwdNew] = useState('');
@@ -67,10 +71,22 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
     } finally { setImporting(false); e.target.value = ''; }
   }
 
+  useEffect(() => {
+    setAiBaseUrl(settings?.aiBaseUrl || '');
+    setAiApiKey(settings?.aiApiKey || '');
+    setAiModel(settings?.aiModel || '');
+  }, [settings?.aiBaseUrl, settings?.aiApiKey, settings?.aiModel]);
+
+  async function saveAiSetting(key: 'aiBaseUrl' | 'aiApiKey' | 'aiModel', value: string) {
+    if (settings?.[key] !== value) await updateSettings({ [key]: value });
+  }
+
   async function handleAiTest() {
     if (aiTesting) return;
     setAiTesting(true); setAiMsg(null);
     try {
+      // 测试前保存尚未失焦的草稿，确保测试使用用户当前看到的配置。
+      await updateSettings({ aiBaseUrl, aiApiKey, aiModel });
       const res = await api.aiTest();
       setAiMsg(res.ok
         ? { type: 'success', text: '连通成功，AI 服务正常响应' }
@@ -222,8 +238,9 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
           <Row label="API 地址">
             <input
               type="text"
-              value={settings.aiBaseUrl || ''}
-              onChange={(e) => handleSettingChange('aiBaseUrl', e.target.value)}
+              value={aiBaseUrl}
+              onChange={(e) => setAiBaseUrl(e.target.value)}
+              onBlur={() => saveAiSetting('aiBaseUrl', aiBaseUrl)}
               placeholder="https://api.openai.com/v1"
               className={cn(inputCls, 'max-w-[13rem]')}
             />
@@ -232,8 +249,9 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
           <Row label="API 密钥">
             <input
               type="password"
-              value={settings.aiApiKey || ''}
-              onChange={(e) => handleSettingChange('aiApiKey', e.target.value)}
+              value={aiApiKey}
+              onChange={(e) => setAiApiKey(e.target.value)}
+              onBlur={() => saveAiSetting('aiApiKey', aiApiKey)}
               placeholder="sk-..."
               className={cn(inputCls, 'max-w-[13rem]')}
             />
@@ -242,8 +260,9 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
           <Row label="模型">
             <input
               type="text"
-              value={settings.aiModel || ''}
-              onChange={(e) => handleSettingChange('aiModel', e.target.value)}
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              onBlur={() => saveAiSetting('aiModel', aiModel)}
               placeholder="gpt-4o-mini"
               className={cn(inputCls, 'max-w-[13rem]')}
             />
