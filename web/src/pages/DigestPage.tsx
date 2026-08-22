@@ -189,12 +189,14 @@ export default function DigestPage() {
               </span>
             </div>
 
-            {entry.data.categories.map((cat, ci) => (
+            {entry.data.categories.map((cat, ci) => {
+              const articleCount = new Set(cat.items.flatMap((item) => item.articleIds)).size;
+              return (
               <div key={ci} className="card-organic !rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5D7052] flex-shrink-0" />
                   <h3 className="font-heading font-semibold text-sm text-[#2C2C24] dark:text-[#E8E6DF]">{cat.name}</h3>
-                  <span className="text-[10px] text-[#78786C]/60 dark:text-[#5A5850]">{cat.items.length} 条</span>
+                  <span className="text-[10px] text-[#78786C]/60 dark:text-[#5A5850]">{articleCount} 篇</span>
                 </div>
                 <div className="space-y-1">
                   {cat.items.map((item, ii) => {
@@ -211,7 +213,8 @@ export default function DigestPage() {
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
