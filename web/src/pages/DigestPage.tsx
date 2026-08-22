@@ -114,7 +114,7 @@ export default function DigestPage() {
             </div>
             <div className="w-full max-w-[16rem] text-center">
               <p className="text-sm font-medium text-[#4A4A40] dark:text-[#B0ADA3] mb-3">
-                {stageLabel(entry.progress ?? 0)}
+                {stageLabel(entry.stage)}
               </p>
               <div className="h-1.5 w-full rounded-full bg-[#E6DCCD]/60 dark:bg-[#2E2B25] overflow-hidden">
                 <div
@@ -216,12 +216,15 @@ export default function DigestPage() {
   );
 }
 
-// 生成进度对应的阶段文案，让等待过程更有"正在推进"的感知
-function stageLabel(progress: number): string {
-  if (progress < 40) return '正在读取当天文章…';
-  if (progress < 70) return 'AI 正在归纳分类…';
-  if (progress < 90) return '正在生成摘要…';
-  return '即将完成…';
+// 阶段由服务端实际处理流程上报，不再按时间模拟进度。
+function stageLabel(stage?: string | null): string {
+  switch (stage) {
+    case 'preparing': return '正在整理当天文章…';
+    case 'generating': return 'AI 正在归纳分类…';
+    case 'parsing': return '正在校验生成内容…';
+    case 'saving': return '正在保存日报…';
+    default: return '正在启动生成…';
+  }
 }
 
 function DigestItemRow({

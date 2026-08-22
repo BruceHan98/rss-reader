@@ -27,19 +27,27 @@ export interface DigestResult {
   generatedAt: string;
 }
 
-// 缓存中只持久化不随文章变化的部分（不含 articles 详情，避免文章被删除/已读状态变化后缓存过期失真）
+export type DigestProgressStage = 'preparing' | 'generating' | 'parsing' | 'saving' | 'completed' | 'failed';
+
+export interface DigestGenerationStatus {
+  status: 'generating' | 'ready' | 'error' | 'idle';
+  progress: number;
+  stage: DigestProgressStage | null;
+  result?: DigestResult;
+  error?: { message: string; code?: DigestErrorCode };
+}
+
 interface StoredCategory {
   name: string;
   items: Array<{ title: string; summary: string; articleIds: string[] }>;
 }
 
-// 单次日报最多纳入的文章数：避免超长内容消耗过多 token / 超出上下文窗口
 const MAX_ARTICLES = 120;
-// 单篇文章正文摘录词数的上下限，实际取值随采样文章数动态调整（文章越多单篇越短），保持总输入量大致恒定
 const PER_ARTICLE_WORDS_MAX = 150;
 const PER_ARTICLE_WORDS_MIN = 40;
-// 期望的文章内容总词数预算（不含 prompt 模板本身），用于反推每篇截断长度
 const TOTAL_WORDS_BUDGET = 6000;
+const DIGEST_TIMEOUT_MS = 120_000;
+const DIGEST_MAX_ATTEMPTS = 3;
 
 interface ArticleRow {
   id: string;
@@ -50,13 +58,17 @@ interface ArticleRow {
   ai_score: number | null;
 }
 
-/**
- * 获取当天全部文章后，按订阅源分桶做轮询（round-robin）采样：
- * 每轮从每个 feed 里各取一篇（feed 内部按 ai_score/时间排序），直到达到 MAX_ARTICLES 或文章耗尽。
- * 相比直接按分数/时间全局排序取前 N 篇，能避免单个高产订阅源挤占名额，保证覆盖面更全面。
- */
+interface DigestJob extends DigestGenerationStatus {
+  updatedAt: number;
+}
+
+const digestJobs = new Map<string, DigestJob>();
+
+function digestJobKey(userId: string, date: string): string {
+  return `${userId}:${date}`;
+}
+
 function getArticlesForDate(date: string): ArticleRow[] {
-  // effective_date 形如 ISO 字符串，用 date(...) 截取日期部分做匹配，兼容本地时区存储的 published_at
   const rows = sqlite
     .prepare(
       `SELECT a.id, a.title, a.summary, a.content, a.feed_id, f.title as feed_title, a.ai_score
@@ -69,17 +81,16 @@ function getArticlesForDate(date: string): ArticleRow[] {
 
   if (rows.length <= MAX_ARTICLES) return rows;
 
-  // 按 feed 分桶，桶内已保持原排序（分数优先）
   const byFeed = new Map<string, ArticleRow[]>();
-  for (const r of rows) {
-    const list = byFeed.get(r.feed_id);
-    if (list) list.push(r);
-    else byFeed.set(r.feed_id, [r]);
+  for (const row of rows) {
+    const bucket = byFeed.get(row.feed_id);
+    if (bucket) bucket.push(row);
+    else byFeed.set(row.feed_id, [row]);
   }
-  const buckets = [...byFeed.values()];
 
   const picked: ArticleRow[] = [];
   let round = 0;
+  const buckets = [...byFeed.values()];
   while (picked.length < MAX_ARTICLES) {
     let addedInRound = 0;
     for (const bucket of buckets) {
@@ -89,7 +100,7 @@ function getArticlesForDate(date: string): ArticleRow[] {
         addedInRound++;
       }
     }
-    if (addedInRound === 0) break; // 所有 feed 的文章都已取完
+    if (addedInRound === 0) break;
     round++;
   }
   return picked;
@@ -103,17 +114,14 @@ function countArticlesForDate(date: string): number {
 }
 
 function buildPrompt(rows: ArticleRow[]): string {
-  // 采样文章越多，单篇截断越短，使总输入词数大致维持在预算内，兼顾全面性与 token 消耗
   const perArticleWords = Math.max(
     PER_ARTICLE_WORDS_MIN,
     Math.min(PER_ARTICLE_WORDS_MAX, Math.round(TOTAL_WORDS_BUDGET / Math.max(1, rows.length)))
   );
   const list = rows
-    .map((r, i) => {
-      // 优先使用摘要（已是精炼文本），仅在没有摘要时才截取正文，减少冗余内容消耗 token
-      const source = r.summary || r.content || '';
-      const text = truncateWords(source, perArticleWords);
-      return `[${i + 1}] (来源: ${r.feed_title})\n标题：${r.title}\n内容：${text}`;
+    .map((row, index) => {
+      const text = truncateWords(row.summary || row.content || '', perArticleWords);
+      return `[${index + 1}] (来源: ${row.feed_title})\n标题：${row.title}\n内容：${text}`;
     })
     .join('\n\n');
 
@@ -135,37 +143,40 @@ ${list}`;
 }
 
 function parseDigestJson(content: string, rows: ArticleRow[]): StoredCategory[] {
-  // 容错：去除可能的 markdown 代码块包裹
   let jsonStr = content.trim();
   const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim();
+
+  // 部分兼容接口会在 JSON 前后附带说明文字，截取最外层对象后再解析。
+  const firstBrace = jsonStr.indexOf('{');
+  const lastBrace = jsonStr.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
 
   const parsed = JSON.parse(jsonStr);
   if (!parsed || !Array.isArray(parsed.categories)) throw new Error('日报 JSON 格式不符合预期');
 
   const categories: StoredCategory[] = [];
-  for (const cat of parsed.categories) {
-    if (!cat || typeof cat.name !== 'string' || !Array.isArray(cat.items)) continue;
+  for (const category of parsed.categories) {
+    if (!category || typeof category.name !== 'string' || !Array.isArray(category.items)) continue;
     const items: StoredCategory['items'] = [];
-    for (const item of cat.items) {
+    for (const item of category.items) {
       if (!item || typeof item.title !== 'string' || typeof item.summary !== 'string') continue;
       const indices: number[] = Array.isArray(item.articleIds) ? item.articleIds : [];
-      // 编号（1-based）映射回真实文章 id，过滤越界编号
       const articleIds = indices
-        .map((n: number) => rows[n - 1]?.id)
+        .map((index: number) => rows[index - 1]?.id)
         .filter((id: string | undefined): id is string => Boolean(id));
-      if (articleIds.length === 0) continue;
-      items.push({ title: item.title.slice(0, 30), summary: item.summary.slice(0, 100), articleIds });
+      if (articleIds.length > 0) {
+        items.push({ title: item.title.slice(0, 30), summary: item.summary.slice(0, 100), articleIds });
+      }
     }
-    if (items.length > 0) categories.push({ name: cat.name.slice(0, 20), items });
+    if (items.length > 0) categories.push({ name: category.name.slice(0, 20), items });
   }
   if (categories.length === 0) throw new Error('日报内容为空');
   return categories;
 }
 
-// 为存储的分类结果实时补充文章详情（标题/来源/已读状态），并过滤已被删除的文章
 function hydrateCategories(stored: StoredCategory[]): DigestCategory[] {
-  const allIds = [...new Set(stored.flatMap((c) => c.items.flatMap((i) => i.articleIds)))];
+  const allIds = [...new Set(stored.flatMap((category) => category.items.flatMap((item) => item.articleIds)))];
   if (allIds.length === 0) return [];
   const rows = sqlite
     .prepare(
@@ -174,23 +185,21 @@ function hydrateCategories(stored: StoredCategory[]): DigestCategory[] {
        WHERE a.id IN (${allIds.map(() => '?').join(',')})`
     )
     .all(...allIds) as Array<{ id: string; title: string; is_read: number; feed_title: string }>;
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  const byId = new Map(rows.map((row) => [row.id, row]));
 
   const categories: DigestCategory[] = [];
-  for (const cat of stored) {
+  for (const category of stored) {
     const items: DigestItem[] = [];
-    for (const item of cat.items) {
+    for (const item of category.items) {
       const articles = item.articleIds
         .map((id) => {
-          const r = byId.get(id);
-          if (!r) return null;
-          return { id: r.id, title: r.title, feedTitle: r.feed_title, isRead: Boolean(r.is_read) };
+          const row = byId.get(id);
+          return row ? { id: row.id, title: row.title, feedTitle: row.feed_title, isRead: Boolean(row.is_read) } : null;
         })
-        .filter((a): a is DigestArticleRef => a !== null);
-      if (articles.length === 0) continue; // 关联文章都已被删除，丢弃该条目
-      items.push({ title: item.title, summary: item.summary, articleIds: articles.map((a) => a.id), articles });
+        .filter((article): article is DigestArticleRef => article !== null);
+      if (articles.length > 0) items.push({ title: item.title, summary: item.summary, articleIds: articles.map((article) => article.id), articles });
     }
-    if (items.length > 0) categories.push({ name: cat.name, items });
+    if (items.length > 0) categories.push({ name: category.name, items });
   }
   return categories;
 }
@@ -201,9 +210,7 @@ function getCachedDigest(userId: string, date: string): DigestResult | null {
     .get(userId, date) as { content: string; article_count: number; generated_at: string } | undefined;
   if (!row) return null;
   try {
-    const stored = JSON.parse(row.content) as StoredCategory[];
-    const categories = hydrateCategories(stored);
-    return { date, categories, articleCount: row.article_count, generatedAt: row.generated_at };
+    return { date, categories: hydrateCategories(JSON.parse(row.content) as StoredCategory[]), articleCount: row.article_count, generatedAt: row.generated_at };
   } catch {
     return null;
   }
@@ -221,81 +228,117 @@ function saveDigest(userId: string, date: string, categories: StoredCategory[], 
   return now;
 }
 
+export type DigestErrorCode = 'NO_ARTICLES' | 'NO_API_KEY' | 'LLM_ERROR' | 'NOT_GENERATED';
+
 export class DigestError extends Error {
-  constructor(message: string, public code: 'NO_ARTICLES' | 'NO_API_KEY' | 'LLM_ERROR' | 'NOT_GENERATED') {
+  constructor(message: string, public code: DigestErrorCode) {
     super(message);
   }
 }
 
-/**
- * 查询指定日期是否已有缓存日报，以及当天文章数（用于前端展示"生成"确认提示，不触发 LLM 调用）。
- */
-export function peekDigest(userId: string, date: string): { cached: DigestResult | null; articleCount: number } {
-  const cached = getCachedDigest(userId, date);
-  const articleCount = cached ? cached.articleCount : countArticlesForDate(date);
-  return { cached, articleCount };
+function isRetryableDigestError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return !/LLM API error: (400|401|403|404)/.test(message);
 }
 
-/**
- * 查询某个月份（YYYY-MM）内已生成日报的日期列表，供日历标记使用。
- */
-export function listGeneratedDates(userId: string, month: string): string[] {
-  const rows = sqlite
-    .prepare(
-      `SELECT date FROM daily_digests WHERE user_id = ? AND date LIKE ? ORDER BY date`
-    )
-    .all(userId, `${month}-%`) as Array<{ date: string }>;
-  return rows.map((r) => r.date);
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * 生成（或读取缓存的）指定日期日报。
- * force=true 时跳过缓存直接重新生成。
- * generate=false 时若无缓存则直接抛出 NOT_GENERATED，不调用 LLM（避免 token 浪费，需用户主动确认生成）。
- */
-export async function getOrGenerateDigest(
+async function generateDigest(
   userId: string,
   date: string,
-  force = false,
-  generate = true
+  onProgress?: (progress: number, stage: DigestProgressStage) => void
 ): Promise<DigestResult> {
-  if (!force) {
-    const cached = getCachedDigest(userId, date);
-    if (cached) return cached;
-  }
-
-  if (!generate) {
-    throw new DigestError('日报尚未生成', 'NOT_GENERATED');
-  }
-
+  onProgress?.(10, 'preparing');
   const rows = getArticlesForDate(date);
-  if (rows.length === 0) {
-    throw new DigestError('当天没有抓取到文章', 'NO_ARTICLES');
-  }
+  if (rows.length === 0) throw new DigestError('当天没有抓取到文章', 'NO_ARTICLES');
 
   const cfg = getSettings(userId);
   const baseUrl = (cfg.aiBaseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
   const apiKey = cfg.aiApiKey || '';
   const model = cfg.aiModel || 'gpt-4o-mini';
-  if (!apiKey) {
-    throw new DigestError('请先在设置页配置 AI API 密钥', 'NO_API_KEY');
-  }
+  if (!apiKey) throw new DigestError('请先在设置页配置 AI API 密钥', 'NO_API_KEY');
 
   const prompt = buildPrompt(rows);
-
-  try {
-    const { content, tokens } = await callLLM(baseUrl, apiKey, model, prompt, {
-      temperature: 0.3,
-      maxTokens: 8192,
-      timeoutMs: 60000,
-    });
-    addTokensUsed(tokens, userId);
-    const stored = parseDigestJson(content, rows);
-    const generatedAt = saveDigest(userId, date, stored, rows.length);
-    const categories = hydrateCategories(stored);
-    return { date, categories, articleCount: rows.length, generatedAt };
-  } catch (err) {
-    console.error('[Digest] generate error:', err);
-    throw new DigestError('日报生成失败，请稍后重试', 'LLM_ERROR');
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= DIGEST_MAX_ATTEMPTS; attempt++) {
+    try {
+      onProgress?.(25, 'generating');
+      const { content, tokens } = await callLLM(baseUrl, apiKey, model, prompt, {
+        temperature: 0.3,
+        maxTokens: 8192,
+        timeoutMs: DIGEST_TIMEOUT_MS,
+      });
+      addTokensUsed(tokens, userId);
+      onProgress?.(85, 'parsing');
+      const stored = parseDigestJson(content, rows);
+      onProgress?.(95, 'saving');
+      const generatedAt = saveDigest(userId, date, stored, rows.length);
+      return { date, categories: hydrateCategories(stored), articleCount: rows.length, generatedAt };
+    } catch (error) {
+      lastError = error;
+      if (attempt === DIGEST_MAX_ATTEMPTS || !isRetryableDigestError(error)) break;
+      console.warn(`[Digest] attempt ${attempt} failed; retrying`, error);
+      await delay(500 * 2 ** (attempt - 1));
+    }
   }
+
+  console.error('[Digest] generate error:', lastError);
+  throw new DigestError('日报生成失败，请稍后重试', 'LLM_ERROR');
+}
+
+export function startDigestGeneration(userId: string, date: string, force = false): DigestGenerationStatus {
+  const key = digestJobKey(userId, date);
+  const running = digestJobs.get(key);
+  if (running?.status === 'generating') return running;
+
+  if (!force) {
+    const cached = getCachedDigest(userId, date);
+    if (cached) return { status: 'ready', progress: 100, stage: 'completed', result: cached };
+  }
+
+  const job: DigestJob = { status: 'generating', progress: 0, stage: 'preparing', updatedAt: Date.now() };
+  digestJobs.set(key, job);
+  generateDigest(userId, date, (progress, stage) => {
+    Object.assign(job, { progress, stage, updatedAt: Date.now() });
+  })
+    .then((result) => Object.assign(job, { status: 'ready' as const, progress: 100, stage: 'completed' as const, result, updatedAt: Date.now() }))
+    .catch((error) => {
+      const digestError = error instanceof DigestError ? error : new DigestError('日报生成失败，请稍后重试', 'LLM_ERROR');
+      Object.assign(job, {
+        status: 'error' as const,
+        stage: 'failed' as const,
+        error: { message: digestError.message, code: digestError.code },
+        updatedAt: Date.now(),
+      });
+    });
+  return job;
+}
+
+export function getDigestGenerationStatus(userId: string, date: string): DigestGenerationStatus {
+  const job = digestJobs.get(digestJobKey(userId, date));
+  if (!job) return { status: 'idle', progress: 0, stage: null };
+  return job;
+}
+
+export function peekDigest(userId: string, date: string): { cached: DigestResult | null; articleCount: number } {
+  const cached = getCachedDigest(userId, date);
+  return { cached, articleCount: cached ? cached.articleCount : countArticlesForDate(date) };
+}
+
+export function listGeneratedDates(userId: string, month: string): string[] {
+  const rows = sqlite
+    .prepare('SELECT date FROM daily_digests WHERE user_id = ? AND date LIKE ? ORDER BY date')
+    .all(userId, `${month}-%`) as Array<{ date: string }>;
+  return rows.map((row) => row.date);
+}
+
+export async function getOrGenerateDigest(userId: string, date: string, force = false, generate = true): Promise<DigestResult> {
+  if (!force) {
+    const cached = getCachedDigest(userId, date);
+    if (cached) return cached;
+  }
+  if (!generate) throw new DigestError('日报尚未生成', 'NOT_GENERATED');
+  return generateDigest(userId, date);
 }

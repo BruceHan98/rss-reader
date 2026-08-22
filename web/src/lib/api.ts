@@ -86,6 +86,16 @@ export interface DigestResult {
   generatedAt: string;
 }
 
+export type DigestProgressStage = 'preparing' | 'generating' | 'parsing' | 'saving' | 'completed' | 'failed';
+
+export interface DigestGenerationStatus {
+  status: 'generating' | 'ready' | 'error' | 'idle';
+  progress: number;
+  stage: DigestProgressStage | null;
+  result?: DigestResult;
+  error?: { message: string; code?: string };
+}
+
 export interface ArticleList {
   articles: Article[];
   total: number;
@@ -253,15 +263,16 @@ export const api = {
   aiTest: () => request<{ ok: boolean; error?: string }>('/ai/test', { method: 'POST' }),
 
   // Digest（AI 日报）
-  // generate=false（默认）时仅读取缓存，不触发 LLM 生成；generate=true 在无缓存时才会生成；force=true 强制重新生成
-  getDigest: (date?: string, opts?: { generate?: boolean; force?: boolean }) => {
+  getDigest: (date?: string) => {
     const q = new URLSearchParams();
     if (date) q.set('date', date);
-    if (opts?.force) q.set('force', 'true');
-    else if (opts?.generate) q.set('generate', 'true');
     const qs = q.toString();
     return request<DigestResult>(`/digest${qs ? `?${qs}` : ''}`);
   },
+  startDigestGeneration: (date: string, force = false) =>
+    request<DigestGenerationStatus>('/digest/generate', { method: 'POST', body: JSON.stringify({ date, force }) }),
+  getDigestGenerationStatus: (date: string) =>
+    request<DigestGenerationStatus>(`/digest/status?date=${encodeURIComponent(date)}`),
   // 查询某月（YYYY-MM）已生成日报的日期列表，供日历标记
   getDigestDates: (month: string) => request<{ dates: string[] }>(`/digest/dates?month=${month}`),
 
