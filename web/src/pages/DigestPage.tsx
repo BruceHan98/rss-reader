@@ -122,7 +122,10 @@ export default function DigestPage() {
                   style={{ width: `${entry.progress ?? 0}%` }}
                 />
               </div>
-              <p className="text-[11px] text-[#78786C]/60 mt-2">{Math.round(entry.progress ?? 0)}%</p>
+              <p className="text-[11px] text-[#78786C]/60 mt-2">
+                {entry.stage === 'classifying' && entry.total ? `已分类 ${entry.processed ?? 0} / ${entry.total} 篇 · ` : ''}
+                {Math.round(entry.progress ?? 0)}%
+              </p>
             </div>
           </div>
         )}
@@ -220,8 +223,8 @@ export default function DigestPage() {
 function stageLabel(stage?: string | null): string {
   switch (stage) {
     case 'preparing': return '正在整理当天文章…';
-    case 'generating': return 'AI 正在归纳分类…';
-    case 'parsing': return '正在校验生成内容…';
+    case 'classifying': return 'AI 正在轻量分类…';
+    case 'merging': return '正在合并全局主题…';
     case 'saving': return '正在保存日报…';
     default: return '正在启动生成…';
   }

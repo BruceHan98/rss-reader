@@ -86,12 +86,14 @@ export interface DigestResult {
   generatedAt: string;
 }
 
-export type DigestProgressStage = 'preparing' | 'generating' | 'parsing' | 'saving' | 'completed' | 'failed';
+export type DigestProgressStage = 'preparing' | 'classifying' | 'merging' | 'saving' | 'completed' | 'failed';
 
 export interface DigestGenerationStatus {
   status: 'generating' | 'ready' | 'error' | 'idle';
   progress: number;
   stage: DigestProgressStage | null;
+  processed?: number;
+  total?: number;
   result?: DigestResult;
   error?: { message: string; code?: string };
 }

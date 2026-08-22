@@ -10,6 +10,8 @@ export interface DigestEntry {
   articleCount?: number;
   progress?: number;
   stage?: DigestProgressStage | null;
+  processed?: number;
+  total?: number;
 }
 
 interface DigestStoreState {
@@ -58,11 +60,11 @@ export const useDigestStore = create<DigestStoreState>((set, get) => ({
         return;
       }
 
-      set(updateEntry(date, { status: 'generating', progress: initial.progress, stage: initial.stage }));
+      set(updateEntry(date, { status: 'generating', progress: initial.progress, stage: initial.stage, processed: initial.processed, total: initial.total }));
       while (true) {
         const status = await api.getDigestGenerationStatus(date);
         if (status.status === 'generating') {
-          set(updateEntry(date, { status: 'generating', progress: status.progress, stage: status.stage }));
+          set(updateEntry(date, { status: 'generating', progress: status.progress, stage: status.stage, processed: status.processed, total: status.total }));
           await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
           continue;
         }
