@@ -59,8 +59,11 @@ interface DigestJob extends DigestGenerationStatus {
 const LIGHTWEIGHT_BATCH_SIZE = 80;
 const TITLE_MAX_WORDS = 50;
 const SUMMARY_MAX_WORDS = 24;
-const DIGEST_TIMEOUT_MS = 120_000;
+// 单次轻量分类不应长时间阻塞整份日报；超时后由重试/拆批接管。
+const DIGEST_TIMEOUT_MS = 45_000;
 const DIGEST_MAX_ATTEMPTS = 3;
+const DIGEST_PARSE_ATTEMPTS = 2;
+const DIGEST_MAX_BATCH_SPLITS = 3;
 const digestJobs = new Map<string, DigestJob>();
 
 function digestJobKey(userId: string, date: string): string {
@@ -231,17 +234,72 @@ async function callDigestLlm(baseUrl: string, apiKey: string, model: string, pro
   let lastError: unknown;
   for (let attempt = 1; attempt <= DIGEST_MAX_ATTEMPTS; attempt++) {
     try {
-      const { content, tokens } = await callLLM(baseUrl, apiKey, model, prompt, { temperature: 0.2, maxTokens: 2048, timeoutMs: DIGEST_TIMEOUT_MS });
+      // 部分推理模型会先输出较长的思考内容；保留足够输出预算，避免 JSON 在 think 块中被截断。
+      const { content, tokens } = await callLLM(baseUrl, apiKey, model, prompt, { temperature: 0.2, maxTokens: 4096, timeoutMs: DIGEST_TIMEOUT_MS });
       addTokensUsed(tokens, userId);
       return content;
     } catch (error) {
       lastError = error;
       if (attempt === DIGEST_MAX_ATTEMPTS || !isRetryableDigestError(error)) break;
-      console.warn(`[Digest] attempt ${attempt} failed; retrying`, error);
+      console.warn(`[Digest] request attempt ${attempt} failed; retrying`, error);
       await delay(500 * 2 ** (attempt - 1));
     }
   }
   throw lastError;
+}
+
+async function requestCategories(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  prompt: string,
+  references: string[][],
+  userId: string
+): Promise<StoredCategory[]> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= DIGEST_PARSE_ATTEMPTS; attempt++) {
+    try {
+      return parseCategories(await callDigestLlm(baseUrl, apiKey, model, prompt, userId), references);
+    } catch (error) {
+      lastError = error;
+      if (attempt < DIGEST_PARSE_ATTEMPTS) {
+        console.warn(`[Digest] invalid model output on attempt ${attempt}; retrying`, error);
+        await delay(500 * attempt);
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function classifyBatch(
+  rows: ArticleRow[],
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  userId: string,
+  splitDepth = 0
+): Promise<StoredCategory[]> {
+  try {
+    return await requestCategories(baseUrl, apiKey, model, buildClassificationPrompt(rows), rows.map((row) => [row.id]), userId);
+  } catch (error) {
+    // 单个批次的格式失败不应让整份日报失败；缩小上下文后再试。
+    if (rows.length <= 1 || splitDepth >= DIGEST_MAX_BATCH_SPLITS) throw error;
+    const middle = Math.ceil(rows.length / 2);
+    // 顺序重试，避免格式异常后瞬间放大为并发请求，触发服务商限流。
+    const first = await classifyBatch(rows.slice(0, middle), baseUrl, apiKey, model, userId, splitDepth + 1);
+    const second = await classifyBatch(rows.slice(middle), baseUrl, apiKey, model, userId, splitDepth + 1);
+    return [...first, ...second];
+  }
+}
+
+function mergeCategoriesLocally(categories: StoredCategory[]): StoredCategory[] {
+  const byName = new Map<string, StoredCategory>();
+  for (const category of categories) {
+    const existing = byName.get(category.name);
+    if (existing) existing.items.push(...category.items);
+    else byName.set(category.name, { name: category.name, items: [...category.items] });
+  }
+  return [...byName.values()];
 }
 
 async function generateDigest(
@@ -264,15 +322,20 @@ async function generateDigest(
     for (let start = 0; start < rows.length; start += LIGHTWEIGHT_BATCH_SIZE) {
       const batch = rows.slice(start, start + LIGHTWEIGHT_BATCH_SIZE);
       onProgress?.(10 + Math.round((start / rows.length) * 65), 'classifying', start, rows.length);
-      const content = await callDigestLlm(baseUrl, apiKey, model, buildClassificationPrompt(batch), userId);
-      batchCategories.push(...parseCategories(content, batch.map((row) => [row.id])));
+      batchCategories.push(...await classifyBatch(batch, baseUrl, apiKey, model, userId));
       onProgress?.(10 + Math.round((Math.min(start + batch.length, rows.length) / rows.length) * 65), 'classifying', Math.min(start + batch.length, rows.length), rows.length);
     }
 
     const intermediate = flattenCategories(batchCategories);
     onProgress?.(80, 'merging', intermediate.length, intermediate.length);
-    const mergedContent = await callDigestLlm(baseUrl, apiKey, model, buildMergePrompt(intermediate), userId);
-    const stored = parseCategories(mergedContent, intermediate.map((item) => item.articleIds));
+    let stored: StoredCategory[];
+    try {
+      stored = await requestCategories(baseUrl, apiKey, model, buildMergePrompt(intermediate), intermediate.map((item) => item.articleIds), userId);
+    } catch (error) {
+      // 全局合并失败时保留已经成功的批次分类，确保用户仍可查看全部文章。
+      console.warn('[Digest] global merge failed; using batch categories', error);
+      stored = mergeCategoriesLocally(batchCategories);
+    }
 
     onProgress?.(95, 'saving');
     const generatedAt = saveDigest(userId, date, stored, rows.length);
