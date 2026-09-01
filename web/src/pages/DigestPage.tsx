@@ -5,7 +5,7 @@ import { zhCN } from 'date-fns/locale';
 import { type DigestItem } from '../lib/api';
 import { useDigestStore } from '../store/digestStore';
 import { cn } from '../lib/utils';
-import { ChevronLeft, ChevronRight, Loader2, Newspaper, RefreshCw, AlertCircle, Settings, Sparkles, CalendarDays } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Loader2, Newspaper, RefreshCw, AlertCircle, Settings, Sparkles } from 'lucide-react';
 import DigestCalendar from '../components/DigestCalendar';
 
 function todayStr(): string {
@@ -99,7 +99,7 @@ export default function DigestPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-[3.5rem] lg:pb-0">
+      <div className="flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
         {entry.status === 'loading' && (
           <div className="flex flex-col items-center justify-center h-full min-h-[16rem] gap-3 text-[#78786C]">
             <Loader2 size={24} className="animate-spin text-[#5D7052]" />
@@ -182,33 +182,26 @@ export default function DigestPage() {
         )}
 
         {entry.status === 'ready' && entry.data && entry.data.categories.length > 0 && (
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between px-1">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between px-1 pb-1">
               <span className="text-xs text-[#78786C] dark:text-[#8A8880]">
-                {dateLabel} · 共 <strong className="text-[#5D7052] dark:text-[#7A9A6E]">{entry.data.articleCount}</strong> 篇文章
+                {dateLabel} · 已整理 <strong className="text-[#5D7052] dark:text-[#7A9A6E]">{entry.data.articleCount}</strong> 篇文章
               </span>
+              <span className="text-[10px] font-semibold tracking-[0.14em] text-[#C18C5D]">DAILY BRIEF</span>
             </div>
 
-            {entry.data.categories.map((cat, ci) => {
+            {entry.data.categories.flatMap((cat, ci) => cat.items.map((item, ii) => {
+              const key = `${ci}-${ii}`;
               return (
-              <div key={ci} className="card-organic !rounded-2xl p-4">
-                <div className="space-y-1">
-                  {cat.items.map((item, ii) => {
-                    const key = `${ci}-${ii}`;
-                    return (
-                      <DigestItemRow
-                        key={key}
-                        item={item}
-                        expanded={expandedKeys.includes(key)}
-                        onToggle={() => toggleExpandedKey(date, key)}
-                        onOpenArticle={(id) => navigate(`/article/${id}`)}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
+                <DigestItemRow
+                  key={key}
+                  item={item}
+                  expanded={expandedKeys.includes(key)}
+                  onToggle={() => toggleExpandedKey(date, key)}
+                  onOpenArticle={(id) => navigate(`/article/${id}`)}
+                />
               );
-            })}
+            }))}
           </div>
         )}
       </div>
@@ -236,6 +229,7 @@ function DigestItemRow({
   onOpenArticle: (id: string) => void;
 }) {
   const multi = item.articles.length > 1;
+  const sourceLabel = multi ? `${item.articles.length} 篇关联原文` : item.articles[0]?.feedTitle ?? '原文速览';
 
   function handleClick() {
     if (multi) {
@@ -246,27 +240,43 @@ function DigestItemRow({
   }
 
   return (
-    <div className="rounded-xl transition-colors duration-150 hover:bg-[#F0EBE5]/50 dark:hover:bg-[#2E2B25]/50">
-      <div
+    <article className={cn(
+      'group relative overflow-hidden rounded-[1.5rem_1.5rem_1.75rem_1.25rem] border border-[#DED8CF]/70 bg-[#FEFEFA]/95 shadow-[0_4px_20px_-8px_rgba(93,112,82,0.24)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-14px_rgba(93,112,82,0.34)] dark:border-[#3A3830] dark:bg-[#232320]',
+      expanded && 'border-[#5D7052]/35 shadow-[0_16px_32px_-14px_rgba(93,112,82,0.30)] dark:border-[#7A9A6E]/35'
+    )}>
+      <div className="pointer-events-none absolute -right-7 -top-8 h-24 w-24 rounded-[40%_60%_65%_35%_/_45%_35%_65%_55%] bg-[#E6DCCD]/50 transition-transform duration-500 group-hover:scale-110 dark:bg-[#5D7052]/10" />
+      <button
+        type="button"
         onClick={handleClick}
-        className="flex items-start gap-2 px-2 py-2 cursor-pointer"
+        className="relative block w-full px-4 pb-3 pt-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5D7052]/45"
+        aria-expanded={multi ? expanded : undefined}
       >
-        <span className="w-1 h-1 rounded-full bg-[#C18C5D]/60 flex-shrink-0 mt-1.5" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-[13px] font-semibold text-[#2C2C24] dark:text-[#E8E6DF]">{item.title}</span>
-            {multi && (
-              <span className="text-[10px] text-[#5D7052] dark:text-[#7A9A6E] font-medium">
-                关联 {item.articles.length} 篇{expanded ? ' ▴' : ' ▾'}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-[#78786C] dark:text-[#8A8880] leading-relaxed mt-0.5">{item.summary}</p>
-          {!multi && item.articles[0] && (
-            <span className="text-[10px] text-[#78786C]/60 dark:text-[#5A5850]">{item.articles[0].feedTitle}</span>
-          )}
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="inline-flex items-center rounded-full bg-[#5D7052]/10 px-2.5 py-1 text-[10px] font-semibold tracking-[0.12em] text-[#5D7052] dark:bg-[#7A9A6E]/15 dark:text-[#9EBD91]">
+            主题速览
+          </span>
+          <span className="max-w-[9rem] truncate text-[10px] font-medium text-[#78786C] dark:text-[#8A8880]">
+            {sourceLabel}
+          </span>
         </div>
-      </div>
+        <h3 className="pr-7 text-[15px] font-bold leading-snug text-[#2C2C24] dark:text-[#E8E6DF]">
+          {item.title}
+        </h3>
+        {item.summary && (
+          <p className="mt-2 line-clamp-3 text-xs leading-5 text-[#78786C] dark:text-[#B0ADA3]">
+            {item.summary}
+          </p>
+        )}
+        <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#5D7052] dark:text-[#9EBD91]">
+          {multi ? (expanded ? '收起关联原文' : '查看关联原文') : '阅读原文'}
+          {multi ? (
+            <ChevronDown size={14} className={cn('transition-transform duration-300', expanded && 'rotate-180')} />
+          ) : (
+            <ArrowUpRight size={14} />
+          )}
+        </span>
+      </button>
+
       {multi && (
         <div
           className={cn(
@@ -276,26 +286,35 @@ function DigestItemRow({
           aria-hidden={!expanded}
         >
           <div className="overflow-hidden">
-            <div className="space-y-1 pb-2">
-              {item.articles.map((a) => (
-                <div
-                  key={a.id}
-                  onClick={(e) => { e.stopPropagation(); onOpenArticle(a.id); }}
-                  className="flex items-center gap-1.5 py-1 rounded-lg cursor-pointer hover:bg-[#5D7052]/10 transition-colors duration-150"
-                >
-                  <span className={cn(
-                    'text-xs truncate flex-1',
-                    a.isRead ? 'text-[#78786C] dark:text-[#5A5850]' : 'text-[#2C2C24] dark:text-[#E8E6DF] font-medium'
-                  )}>
-                    {a.title}
-                  </span>
-                  <span className="text-[10px] text-[#78786C]/60 dark:text-[#5A5850] flex-shrink-0">{a.feedTitle}</span>
+            <div className="px-4 pb-4">
+              <div className="border-t border-[#DED8CF]/70 pt-3 dark:border-[#3A3830]">
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-[10px] font-semibold tracking-[0.12em] text-[#78786C] dark:text-[#8A8880]">关联原文</span>
+                  <span className="text-[10px] text-[#78786C]/70 dark:text-[#5A5850]">{item.articles.length} 篇</span>
                 </div>
-              ))}
+                {item.articles.map((article) => (
+                  <button
+                    key={article.id}
+                    type="button"
+                    onClick={() => onOpenArticle(article.id)}
+                    tabIndex={expanded ? 0 : -1}
+                    className="group/article flex w-full items-center gap-2 border-t border-[#DED8CF]/45 py-3 text-left first:border-t-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5D7052]/45 focus-visible:ring-offset-2 dark:border-[#3A3830]/80"
+                  >
+                    <span className={cn(
+                      'min-w-0 flex-1 text-xs leading-5 transition-colors duration-150 group-hover/article:text-[#5D7052] dark:group-hover/article:text-[#9EBD91]',
+                      article.isRead ? 'text-[#78786C] dark:text-[#8A8880]' : 'font-semibold text-[#2C2C24] dark:text-[#E8E6DF]'
+                    )}>
+                      {article.title}
+                    </span>
+                    <span className="max-w-[5.5rem] truncate text-[10px] text-[#78786C]/70 dark:text-[#5A5850]">{article.feedTitle}</span>
+                    <ArrowUpRight size={13} className="flex-shrink-0 text-[#C18C5D] opacity-0 transition-opacity duration-150 group-hover/article:opacity-100" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }
