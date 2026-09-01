@@ -18,11 +18,11 @@ export default function DigestPage() {
   // 日期存放在 URL query 中：从日报进入文章详情再返回时，历史记录带着正确日期，
   // 不会因组件重新挂载而回退到默认的「今天」
   const date = searchParams.get('date') || todayStr();
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const { getEntry, fetchDigest, generateDigest } = useDigestStore();
+  const { getEntry, getExpandedKeys, toggleExpandedKey, fetchDigest, generateDigest } = useDigestStore();
   const entry = getEntry(date);
+  const expandedKeys = getExpandedKeys(date);
 
   useEffect(() => {
     // idle 状态（首次访问该日期）才发起查询；已有状态（包括其他日期正在后台生成）不受影响
@@ -190,14 +190,8 @@ export default function DigestPage() {
             </div>
 
             {entry.data.categories.map((cat, ci) => {
-              const articleCount = new Set(cat.items.flatMap((item) => item.articleIds)).size;
               return (
               <div key={ci} className="card-organic !rounded-2xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#5D7052] flex-shrink-0" />
-                  <h3 className="font-heading font-semibold text-sm text-[#2C2C24] dark:text-[#E8E6DF]">{cat.name}</h3>
-                  <span className="text-[10px] text-[#78786C]/60 dark:text-[#5A5850]">{articleCount} 篇</span>
-                </div>
                 <div className="space-y-1">
                   {cat.items.map((item, ii) => {
                     const key = `${ci}-${ii}`;
@@ -205,8 +199,8 @@ export default function DigestPage() {
                       <DigestItemRow
                         key={key}
                         item={item}
-                        expanded={expandedKey === key}
-                        onToggle={() => setExpandedKey((k) => (k === key ? null : key))}
+                        expanded={expandedKeys.includes(key)}
+                        onToggle={() => toggleExpandedKey(date, key)}
                         onOpenArticle={(id) => navigate(`/article/${id}`)}
                       />
                     );
@@ -273,23 +267,33 @@ function DigestItemRow({
           )}
         </div>
       </div>
-      {multi && expanded && (
-        <div className="ml-5 pl-2.5 border-l-2 border-[#DED8CF]/60 dark:border-[#3A3830] space-y-1 pb-2">
-          {item.articles.map((a) => (
-            <div
-              key={a.id}
-              onClick={(e) => { e.stopPropagation(); onOpenArticle(a.id); }}
-              className="flex items-center gap-1.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-[#5D7052]/10 transition-colors duration-150"
-            >
-              <span className={cn(
-                'text-xs truncate flex-1',
-                a.isRead ? 'text-[#78786C] dark:text-[#5A5850]' : 'text-[#2C2C24] dark:text-[#E8E6DF] font-medium'
-              )}>
-                {a.title}
-              </span>
-              <span className="text-[10px] text-[#78786C]/60 dark:text-[#5A5850] flex-shrink-0">{a.feedTitle}</span>
+      {multi && (
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-300 ease-out',
+            expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          )}
+          aria-hidden={!expanded}
+        >
+          <div className="overflow-hidden">
+            <div className="space-y-1 pb-2">
+              {item.articles.map((a) => (
+                <div
+                  key={a.id}
+                  onClick={(e) => { e.stopPropagation(); onOpenArticle(a.id); }}
+                  className="flex items-center gap-1.5 py-1 rounded-lg cursor-pointer hover:bg-[#5D7052]/10 transition-colors duration-150"
+                >
+                  <span className={cn(
+                    'text-xs truncate flex-1',
+                    a.isRead ? 'text-[#78786C] dark:text-[#5A5850]' : 'text-[#2C2C24] dark:text-[#E8E6DF] font-medium'
+                  )}>
+                    {a.title}
+                  </span>
+                  <span className="text-[10px] text-[#78786C]/60 dark:text-[#5A5850] flex-shrink-0">{a.feedTitle}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>

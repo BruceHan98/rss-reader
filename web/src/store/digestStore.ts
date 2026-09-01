@@ -17,7 +17,10 @@ export interface DigestEntry {
 interface DigestStoreState {
   entries: Record<string, DigestEntry>;
   generatedDates: Record<string, string[]>;
+  expandedKeys: Record<string, string[]>;
   getEntry: (date: string) => DigestEntry;
+  getExpandedKeys: (date: string) => string[];
+  toggleExpandedKey: (date: string, key: string) => void;
   fetchDigest: (date: string) => Promise<void>;
   generateDigest: (date: string, force?: boolean) => Promise<void>;
   fetchGeneratedDates: (month: string) => Promise<void>;
@@ -33,8 +36,15 @@ function updateEntry(date: string, entry: DigestEntry) {
 export const useDigestStore = create<DigestStoreState>((set, get) => ({
   entries: {},
   generatedDates: {},
+  expandedKeys: {},
 
   getEntry: (date) => get().entries[date] ?? DEFAULT_ENTRY,
+  getExpandedKeys: (date) => get().expandedKeys[date] ?? [],
+  toggleExpandedKey: (date, key) => set((state) => {
+    const keys = state.expandedKeys[date] ?? [];
+    const nextKeys = keys.includes(key) ? keys.filter((item) => item !== key) : [...keys, key];
+    return { expandedKeys: { ...state.expandedKeys, [date]: nextKeys } };
+  }),
 
   fetchDigest: async (date) => {
     set(updateEntry(date, { status: 'loading' }));
