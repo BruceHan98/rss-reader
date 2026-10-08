@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format, addDays, isToday } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -20,6 +20,7 @@ export default function DigestPage() {
   const date = searchParams.get('date') || todayStr();
   const [showCalendar, setShowCalendar] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef(0);
 
   const { getEntry, getExpandedKeys, toggleExpandedKey, fetchDigest, generateDigest } = useDigestStore();
   const entry = getEntry(date);
@@ -31,19 +32,25 @@ export default function DigestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || entry.status !== 'ready') return;
     const saved = Number(sessionStorage.getItem(`digest-scroll:${date}`));
-    requestAnimationFrame(() => {
-      container.scrollTo({ top: Number.isFinite(saved) && saved > 0 ? saved : 0, behavior: 'instant' });
+    const position = Number.isFinite(saved) && saved > 0 ? saved : 0;
+    scrollPositionRef.current = position;
+    container.scrollTo({ top: position, behavior: 'instant' });
+
+    // 卡片展开状态和页面布局会在渲染后继续稳定，再校正一次防止位置偏移。
+    const frame = requestAnimationFrame(() => {
+      container.scrollTo({ top: position, behavior: 'instant' });
     });
+    return () => cancelAnimationFrame(frame);
   }, [date, entry.status]);
 
   useEffect(() => {
     const currentDate = date;
     return () => {
-      const position = scrollContainerRef.current?.scrollTop ?? 0;
+      const position = scrollPositionRef.current;
       if (position > 0) {
         sessionStorage.setItem(`digest-scroll:${currentDate}`, String(position));
       } else {
@@ -53,7 +60,8 @@ export default function DigestPage() {
   }, [date]);
 
   function saveScrollPosition() {
-    const position = scrollContainerRef.current?.scrollTop ?? 0;
+    const position = scrollContainerRef.current?.scrollTop ?? scrollPositionRef.current;
+    scrollPositionRef.current = position;
     if (position > 0) sessionStorage.setItem(`digest-scroll:${date}`, String(position));
   }
 
@@ -126,7 +134,11 @@ export default function DigestPage() {
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <div
+        ref={scrollContainerRef}
+        onScroll={(event) => { scrollPositionRef.current = event.currentTarget.scrollTop; }}
+        className="flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0"
+      >
         {entry.status === 'loading' && (
           <div className="flex flex-col items-center justify-center h-full min-h-[16rem] gap-3 text-[#78786C]">
             <Loader2 size={24} className="animate-spin text-[#5D7052]" />

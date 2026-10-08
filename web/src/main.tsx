@@ -5,6 +5,13 @@ import App from './App';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 
+// iOS 从主屏幕启动时，display-mode 媒体查询在部分系统版本中不会稳定匹配。
+// navigator.standalone 是此场景的原生标记，供安全区样式可靠识别。
+const isIosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+if (isIosStandalone) {
+  document.documentElement.classList.add('ios-pwa-standalone');
+}
+
 // 监听新 SW 激活后刷新页面（autoUpdate 模式：SW skipWaiting 后触发 controllerchange）
 // 必须在 registerSW 之前绑定，否则可能错过事件
 if ('serviceWorker' in navigator) {
