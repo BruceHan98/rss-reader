@@ -106,7 +106,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
   const inputCls = 'h-9 px-3 rounded-xl border border-[#DED8CF]/80 dark:border-[#3A3830] bg-[#FDFCF8] dark:bg-[#232320] text-sm text-[#2C2C24] dark:text-[#E8E6DF] placeholder:text-[#C8C4BB] dark:placeholder:text-[#4A4840] focus:outline-none focus:ring-2 focus:ring-[#5D7052]/30 focus:border-[#5D7052]/60 transition-all duration-150 w-full';
 
   return (
-    <div className="flex flex-col h-full bg-[#F5F3EE] dark:bg-[#1C1C18] overflow-y-auto pb-[3.5rem] lg:pb-0">
+    <div className="flex flex-col h-full bg-[#F5F3EE] dark:bg-[#1C1C18] overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
       {/* Header */}
       <div className="max-w-xl mx-auto w-full px-4 py-5 space-y-3">
 

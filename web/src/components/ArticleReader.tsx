@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import mermaid from 'mermaid';
@@ -291,25 +291,33 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     setLoading(false);
   }
 
+  // 切换文章时先保存旧文位置，并在浏览器绘制新文章前将复用的滚动容器归零。
+  // 桌面端阅读器不会卸载，缺少这一步时新文章会继承上一篇的 scrollTop。
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    container?.scrollTo({ top: 0, behavior: 'instant' });
+    lastScrollY.current = 0;
+
+    return () => {
+      const pos = container?.scrollTop ?? 0;
+      if (pos > 0) {
+        localStorage.setItem(`read-pos:${articleId}`, String(pos));
+      } else {
+        localStorage.removeItem(`read-pos:${articleId}`);
+      }
+    };
+  }, [articleId]);
+
   useEffect(() => {
     fetchCancelRef.current = false;
     fetchArticle();
     return () => {
       fetchCancelRef.current = true;
-      // 离开时保存当前滚动位置（包括 0，确保用户滚回顶部后下次从头开始）
-      if (scrollRef.current) {
-        const pos = scrollRef.current.scrollTop;
-        if (pos > 0) {
-          localStorage.setItem(`read-pos:${articleId}`, String(pos));
-        } else {
-          localStorage.removeItem(`read-pos:${articleId}`);
-        }
-      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId]);
 
-  // 文章加载完成后，恢复上次已读位置
+  // 文章加载完成后，恢复当前文章上次已读位置
   useEffect(() => {
     if (!article || !scrollRef.current) return;
     const saved = localStorage.getItem(`read-pos:${article.id}`);
@@ -624,7 +632,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     >
       {/* Toolbar: fixed on mobile, static on desktop */}
       <div className={cn(
-        "border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FDFCF8]/90 dark:bg-[#1C1C18]/95 backdrop-blur-sm z-30",
+        "ios-pwa-top-bar border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FDFCF8]/90 dark:bg-[#1C1C18]/95 backdrop-blur-sm z-30",
         "fixed top-0 left-0 right-0 transition-[transform,opacity] duration-300 ease-in-out",
         "md:static md:flex-shrink-0 md:translate-y-0 md:opacity-100",
         immersiveMode ? "-translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
@@ -801,7 +809,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         }}
       >
         {/* Spacer for fixed toolbar on mobile */}
-        <div className="h-14 md:hidden" />
+        <div className="ios-pwa-reader-spacer h-14 md:hidden" />
         <article className={cn('mx-auto px-6 py-10', widthPreset.maxW)}>
           {/* Feed + meta */}
           <div className="flex items-center gap-2 mb-5">
@@ -891,8 +899,8 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
             </div>
           )}
         </article>
-        {/* Spacer for fixed bottom nav on mobile */}
-        <div className="h-14 md:hidden" />
+        {/* 为底部导航与安全区预留额外阅读留白，避免正文末尾贴边。 */}
+        <div className="h-[calc(5.5rem+env(safe-area-inset-bottom))] md:hidden" />
       </div>
 
       {/* Image lightbox */}

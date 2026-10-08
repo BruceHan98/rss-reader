@@ -40,7 +40,7 @@ export default function SearchPage() {
   return (
     <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
       {/* Header */}
-      <div className="bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
+      <div className="ios-pwa-top-bar bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
         <form onSubmit={handleSearch} className="flex-1 flex gap-2">
           <div className="flex-1 relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78786C]/60" />
@@ -49,7 +49,7 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜索标题、摘要、正文…"
-              className="w-full h-8 pl-8 pr-3 rounded-full border border-[#DED8CF] dark:border-[#3A3830] bg-[#F0EBE5]/40 dark:bg-[#232320] text-xs text-[#2C2C24] dark:text-[#E8E6DF] placeholder-[#78786C]/60 dark:placeholder-[#5A5850] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
+              className="w-full h-8 pl-8 pr-3 rounded-full border border-[#DED8CF] dark:border-[#3A3830] bg-[#F0EBE5]/40 dark:bg-[#232320] text-base md:text-xs text-[#2C2C24] dark:text-[#E8E6DF] placeholder-[#78786C]/60 dark:placeholder-[#5A5850] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#5D7052]/25 focus:border-[#5D7052]/40"
               autoFocus
             />
           </div>

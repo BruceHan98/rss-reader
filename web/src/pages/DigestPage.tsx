@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format, addDays, isToday } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -19,6 +19,7 @@ export default function DigestPage() {
   // 不会因组件重新挂载而回退到默认的「今天」
   const date = searchParams.get('date') || todayStr();
   const [showCalendar, setShowCalendar] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const { getEntry, getExpandedKeys, toggleExpandedKey, fetchDigest, generateDigest } = useDigestStore();
   const entry = getEntry(date);
@@ -29,6 +30,32 @@ export default function DigestPage() {
     if (entry.status === 'idle') fetchDigest(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || entry.status !== 'ready') return;
+    const saved = Number(sessionStorage.getItem(`digest-scroll:${date}`));
+    requestAnimationFrame(() => {
+      container.scrollTo({ top: Number.isFinite(saved) && saved > 0 ? saved : 0, behavior: 'instant' });
+    });
+  }, [date, entry.status]);
+
+  useEffect(() => {
+    const currentDate = date;
+    return () => {
+      const position = scrollContainerRef.current?.scrollTop ?? 0;
+      if (position > 0) {
+        sessionStorage.setItem(`digest-scroll:${currentDate}`, String(position));
+      } else {
+        sessionStorage.removeItem(`digest-scroll:${currentDate}`);
+      }
+    };
+  }, [date]);
+
+  function saveScrollPosition() {
+    const position = scrollContainerRef.current?.scrollTop ?? 0;
+    if (position > 0) sessionStorage.setItem(`digest-scroll:${date}`, String(position));
+  }
 
   function setDate(d: string) {
     // 用 replace 避免每次切换日期都新增一条历史记录（否则「返回」需要点很多次才能退出日报页）
@@ -48,7 +75,7 @@ export default function DigestPage() {
   return (
     <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
       {/* Header */}
-      <div className="bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
+      <div className="ios-pwa-top-bar bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <Newspaper size={16} className="text-[#5D7052] dark:text-[#7A9A6E] flex-shrink-0" />
           <h2 className="font-heading font-semibold text-sm text-[#2C2C24] dark:text-[#E8E6DF] truncate">今日日报</h2>
@@ -99,7 +126,7 @@ export default function DigestPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
         {entry.status === 'loading' && (
           <div className="flex flex-col items-center justify-center h-full min-h-[16rem] gap-3 text-[#78786C]">
             <Loader2 size={24} className="animate-spin text-[#5D7052]" />
@@ -198,7 +225,10 @@ export default function DigestPage() {
                   item={item}
                   expanded={expandedKeys.includes(key)}
                   onToggle={() => toggleExpandedKey(date, key)}
-                  onOpenArticle={(id) => navigate(`/article/${id}`)}
+                  onOpenArticle={(id) => {
+                    saveScrollPosition();
+                    navigate(`/article/${id}`);
+                  }}
                 />
               );
             }))}

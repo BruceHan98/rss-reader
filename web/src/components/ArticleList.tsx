@@ -565,7 +565,7 @@ export default function ArticleList() {
   return (
     <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
       {/* Mobile top header */}
-      <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm flex-shrink-0">
+      <div className="ios-pwa-top-bar lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm flex-shrink-0">
         <div className="flex items-center gap-2 flex-1">
           <div className="w-6 h-6 rounded-full bg-[#5D7052] flex items-center justify-center">
             <Rss size={12} className="text-[#F3F4F1]" />
@@ -874,7 +874,7 @@ ArticleItem({
         className={cn(
           'article-card-title text-[15px] leading-snug mb-1 line-clamp-2',
           !suppressReadStyle && article.isRead
-            ? 'text-[#78786C] dark:text-[#5A5850] font-normal'
+            ? 'text-[#78786C] dark:text-[#5A5850] font-semibold'
             : 'text-[#2C2C24] dark:text-[#E8E6DF] font-semibold'
         )}
       >

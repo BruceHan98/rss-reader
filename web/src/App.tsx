@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from './store';
 import Layout from './components/Layout';
@@ -13,12 +13,25 @@ import { setUnauthorizedHandler, ApiError } from './lib/api';
 
 type AuthState = 'checking' | 'logged-in' | 'logged-out';
 
+const ARTICLE_LIST_MIN_WIDTH = 280;
+const ARTICLE_LIST_MAX_WIDTH = 640;
+const ARTICLE_LIST_DEFAULT_WIDTH = 384;
+
+function loadArticleListWidth() {
+  const saved = Number(localStorage.getItem('article-list-width'));
+  return Number.isFinite(saved)
+    ? Math.min(Math.max(saved, ARTICLE_LIST_MIN_WIDTH), ARTICLE_LIST_MAX_WIDTH)
+    : ARTICLE_LIST_DEFAULT_WIDTH;
+}
+
 export default function App() {
   const { loadFeeds, loadGroups, loadSettings } = useStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [authState, setAuthState] = useState<AuthState>('checking');
   const [username, setUsername] = useState('');
+  const [articleListWidth, setArticleListWidth] = useState(loadArticleListWidth);
+  const articleListResizeStart = useRef<{ x: number; width: number } | null>(null);
 
   function handleLogout() {
     setAuthState('logged-out');
@@ -120,6 +133,32 @@ export default function App() {
     );
   }
 
+  function handleArticleListResizeStart(event: PointerEvent<HTMLDivElement>) {
+    if (window.innerWidth < 768) return;
+    event.preventDefault();
+    articleListResizeStart.current = { x: event.clientX, width: articleListWidth };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleArticleListResize(event: PointerEvent<HTMLDivElement>) {
+    const start = articleListResizeStart.current;
+    if (!start) return;
+    const nextWidth = Math.min(
+      Math.max(start.width + event.clientX - start.x, ARTICLE_LIST_MIN_WIDTH),
+      ARTICLE_LIST_MAX_WIDTH,
+    );
+    setArticleListWidth(nextWidth);
+  }
+
+  function handleArticleListResizeEnd() {
+    if (!articleListResizeStart.current) return;
+    articleListResizeStart.current = null;
+    setArticleListWidth((width) => {
+      localStorage.setItem('article-list-width', String(width));
+      return width;
+    });
+  }
+
   // 移动端路由状态
   const isArticleRoute = location.pathname.startsWith('/article/');
   const isSpecialRoute = location.pathname === '/search' || location.pathname === '/settings' || location.pathname === '/digest';
@@ -135,13 +174,27 @@ export default function App() {
          */}
         <div
           className={[
-            'h-full border-r border-[#DED8CF]/50 overflow-hidden flex-shrink-0',
-            'w-full md:w-80 lg:w-96',
+            'relative h-full border-r border-[#DED8CF]/50 overflow-hidden flex-shrink-0',
+            'w-full md:w-[var(--article-list-width)]',
             showListOnMobile ? 'flex flex-col' : 'hidden',
             isSpecialRoute ? 'md:hidden' : 'md:flex md:flex-col',
           ].join(' ')}
+          style={{ '--article-list-width': `${articleListWidth}px` } as CSSProperties}
         >
           <ArticleList />
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整文章列表宽度"
+            title="拖拽调整文章列表宽度"
+            onPointerDown={handleArticleListResizeStart}
+            onPointerMove={handleArticleListResize}
+            onPointerUp={handleArticleListResizeEnd}
+            onPointerCancel={handleArticleListResizeEnd}
+            className="hidden md:block absolute inset-y-0 -right-1.5 z-20 w-3 cursor-col-resize touch-none group"
+          >
+            <div className="mx-auto h-full w-px bg-transparent group-hover:bg-[#5D7052]/50 group-active:bg-[#5D7052] transition-colors" />
+          </div>
         </div>
 
         <div
