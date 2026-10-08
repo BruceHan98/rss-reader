@@ -15,7 +15,7 @@ type AuthState = 'checking' | 'logged-in' | 'logged-out';
 
 const ARTICLE_LIST_MIN_WIDTH = 280;
 const ARTICLE_LIST_MAX_WIDTH = 640;
-const ARTICLE_LIST_DEFAULT_WIDTH = 384;
+const ARTICLE_LIST_DEFAULT_WIDTH = 440;
 
 function loadArticleListWidth() {
   const saved = Number(localStorage.getItem('article-list-width'));
