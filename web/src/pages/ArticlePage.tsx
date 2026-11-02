@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import ArticleReader from '../components/ArticleReader';
@@ -8,7 +8,7 @@ export default function ArticlePage() {
   const navigate = useNavigate();
   const { setImmersiveMode, markArticleRead } = useStore();
 
-  useEffect(() => () => { setImmersiveMode(false); }, []);
+  useLayoutEffect(() => () => { setImmersiveMode(false); }, [setImmersiveMode]);
 
   if (!id) return null;
 

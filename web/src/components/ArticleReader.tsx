@@ -20,7 +20,9 @@ const READER_STYLES = `
   .article-body h1,
   .article-body h2,
   .article-body h3,
-  .article-body h4 {
+  .article-body h4,
+  .article-body h5,
+  .article-body h6 {
     font-family: var(--font-ui);
     color: var(--color-fg);
     margin-top: 2em;
@@ -28,9 +30,12 @@ const READER_STYLES = `
     line-height: 1.3;
     font-weight: 700;
   }
-  .article-body h1 { font-size: 1.6rem; }
-  .article-body h2 { font-size: 1.35rem; }
-  .article-body h3 { font-size: 1.15rem; }
+  .article-body h1 { font-size: 19px; }
+  .article-body h2 { font-size: 18px; }
+  .article-body h3 { font-size: 17px; }
+  .article-body h4 { font-size: 16px; }
+  .article-body h5 { font-size: 15px; }
+  .article-body h6 { font-size: 14px; }
   .article-body p {
     margin-bottom: 1.5em;
     text-align: justify;
@@ -195,6 +200,7 @@ interface Props {
 export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   const { setImmersiveMode, immersiveMode } = useStore();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const isScrolling = useRef(false);
   const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrollY = useRef(0);
@@ -232,16 +238,26 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     setShowFontPicker(false);
   }
 
-  // Inject styles once
+  // 更新已有样式，确保开发热更新时正文排版同步生效。
   useEffect(() => {
     const id = 'reader-styles';
-    if (!document.getElementById(id)) {
-      const style = document.createElement('style');
-      style.id = id;
-      style.textContent = READER_STYLES;
-      document.head.appendChild(style);
-    }
+    const style = document.getElementById(id) ?? document.createElement('style');
+    style.id = id;
+    style.textContent = READER_STYLES;
+    if (!style.isConnected) document.head.appendChild(style);
   }, []);
+
+  // 占位跟随固定菜单的实际高度，包括 iOS 安全区，避免正文被遮挡。
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    const container = scrollRef.current;
+    if (!toolbar || !container) return;
+    const syncHeight = () => container.style.setProperty('--reader-toolbar-height', `${toolbar.offsetHeight}px`);
+    syncHeight();
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(toolbar, { box: 'border-box' });
+    return () => observer.disconnect();
+  }, [loading, articleId]);
 
   async function fetchArticle() {
     fetchCancelRef.current = false;
@@ -614,6 +630,12 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       }
     }
 
+    // 正文标题不沿用订阅源的字号，避免超过文章主标题。
+    doc.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, :is(h1, h2, h3, h4, h5, h6) *').forEach((heading) => {
+      heading.style.removeProperty('font-size');
+      heading.removeAttribute('size');
+    });
+
     // 普通段落不沿用订阅源的内联对齐，让阅读器统一两端对齐。
     doc.querySelectorAll('p').forEach((paragraph) => {
       if (paragraph.closest('blockquote, li, pre, code, th, td, figcaption') ||
@@ -632,7 +654,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       onClick={(e) => { const t=e.target as HTMLElement; if (t.closest("button,a")) return; setShowWidthPicker(false); setShowFontPicker(false); if (window.innerWidth < 768) { if (!isScrolling.current) setImmersiveMode(false); } }}
     >
       {/* Toolbar: fixed on mobile, static on desktop */}
-      <div className={cn(
+      <div ref={toolbarRef} className={cn(
         "ios-pwa-top-bar border-b border-[#E8EBF0] dark:border-[#33363D] bg-[#FFFFFF] dark:bg-[#202124] z-30",
         "fixed top-0 left-0 right-0 transition-[transform,opacity] duration-300 ease-in-out",
         "md:static md:flex-shrink-0 md:translate-y-0 md:opacity-100",
@@ -799,8 +821,8 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         }}
       >
         {/* Spacer for fixed toolbar on mobile */}
-        <div className="ios-pwa-reader-spacer h-14 md:hidden" />
-        <article className={cn('reading-sheet mx-auto px-[32px] md:px-[48px] py-[32px] md:py-[40px]', widthPreset.maxW)}>
+        <div className="ios-pwa-reader-spacer" aria-hidden="true" />
+        <article className={cn('reading-sheet w-full mx-auto px-[28px] md:px-[40px] pt-[16px] pb-[32px] md:py-[40px]', widthPreset.maxW)}>
           {/* Feed + meta */}
           <div className="list-meta flex flex-wrap items-center gap-2 mb-3 text-[#717784] dark:text-[#959CA8]">
             {article.feed_favicon && (
@@ -883,7 +905,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           )}
         </article>
         {/* 为底部导航与安全区预留额外阅读留白，避免正文末尾贴边。 */}
-        <div className="h-[calc(5.5rem+env(safe-area-inset-bottom))] md:hidden" />
+        <div className="h-[calc(var(--mobile-tab-height)+1.5rem+env(safe-area-inset-bottom))] md:hidden" />
       </div>
 
       {/* Image lightbox */}

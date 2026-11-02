@@ -134,9 +134,9 @@ export const useStore = create<AppState>((set, get) => ({
 
   updateSettings: async (data) => {
     const updated = await api.updateSettings(data);
-    set({ settings: updated });
     applyTheme(updated.theme);
     applyFontSettings(updated.fontSize, updated.lineHeight);
+    set({ settings: updated });
   },
 
   markArticleRead: async (id, isRead = true, feedId?: string, opened = false) => {
@@ -196,11 +196,22 @@ function applyTheme(theme: string) {
       root.classList.remove('dark');
     }
   }
+  const isDark = root.classList.contains('dark');
   const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (themeColor) {
-    themeColor.content = root.classList.contains('dark') ? '#17181A' : '#F7F8FA';
+    themeColor.content = getComputedStyle(root).getPropertyValue('--color-bg-card').trim() || (isDark ? '#202124' : '#FFFFFF');
   }
+  const statusBar = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (statusBar) statusBar.content = isDark ? 'black-translucent' : 'default';
+  localStorage.setItem('rss-theme', theme);
 }
+
+applyTheme(localStorage.getItem('rss-theme') || 'auto');
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if ((useStore.getState().settings?.theme || localStorage.getItem('rss-theme') || 'auto') === 'auto') {
+    applyTheme('auto');
+  }
+});
 
 function applyFontSettings(fontSize: string, lineHeight: string) {
   const root = document.documentElement;

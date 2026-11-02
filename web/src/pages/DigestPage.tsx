@@ -274,11 +274,14 @@ function DigestItemRow({
   }
 
   return (
-    <article className="article-row relative overflow-hidden">
+    <article className="article-row relative">
       <button
         type="button"
         onClick={handleClick}
-        className="relative block w-full py-[16px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
+        className={cn(
+          'block w-full py-3 text-left bg-[var(--color-bg-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]',
+          multi && expanded ? 'sticky top-0 z-10 border-b border-[var(--color-border)]' : 'relative'
+        )}
         aria-label={`${multi ? (expanded ? '收起关联原文' : '查看关联原文') : '阅读原文'}：${item.title}`}
         aria-expanded={multi ? expanded : undefined}
       >
@@ -311,8 +314,8 @@ function DigestItemRow({
           aria-hidden={!expanded}
         >
           <div className="overflow-hidden">
-            <div className="pb-2">
-              <div className="border-t border-[var(--color-border)]">
+            <div className="bg-[var(--color-muted)]">
+              <div className="divide-y divide-[var(--color-border)]">
                 {item.articles.map((article) => (
                   <button
                     key={article.id}
@@ -320,16 +323,16 @@ function DigestItemRow({
                     onClick={() => onOpenArticle(article.id)}
                     tabIndex={expanded ? 0 : -1}
                     aria-label={`阅读原文：${article.title}`}
-                    className="article-row block w-full py-[16px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
+                    className="block w-full py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
                   >
                     <span className="page-content-gutter flex items-start gap-2">
-                      <span className="min-w-0 flex-1 pl-2">
-                        <span className="list-meta block mb-[6px] truncate">{article.feedTitle}</span>
-                        <span className={cn('list-title line-clamp-2', article.isRead && '!text-[var(--color-muted-fg)]')}>
+                      <span className="min-w-0 flex-1 pl-3 border-l-2 border-[var(--color-border)]">
+                        <span className="block text-[11px] leading-4 text-[var(--color-muted-fg)] mb-1 truncate">{article.feedTitle}</span>
+                        <span className={cn('line-clamp-2 text-[13px] leading-5 font-normal text-[var(--color-fg-muted)]', article.isRead && '!text-[var(--color-muted-fg)]')}>
                           {article.title}
                         </span>
                       </span>
-                      <ArrowUpRight size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-muted-fg)]" />
+                      <ArrowUpRight size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-muted-fg)]" />
                     </span>
                   </button>
                 ))}

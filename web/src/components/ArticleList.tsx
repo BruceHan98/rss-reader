@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, cacheArticle, type Article, type AiTag } from '../lib/api';
 import { cn, relativeTime } from '../lib/utils';
@@ -11,7 +11,7 @@ const PAGE_SIZE = 30;
 
 export default function ArticleList() {
   const {
-    filter, selectedArticleId, settings,
+    filter, settings,
     feeds, groups,
     setSelectedArticle, markArticleRead, markAllRead, loadFeeds, setSidebarOpen, sidebarOpen,
   } = useStore();
@@ -20,6 +20,7 @@ export default function ArticleList() {
   const filterRef = useRef(filter);
   useEffect(() => { filterRef.current = filter; }, [filter]);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // 「滚动自动已读」是否开启
   const markReadOnScroll = settings?.markReadOnScroll === 'true';
@@ -657,12 +658,14 @@ export default function ArticleList() {
         {/* AI 分析后按评分与标签筛选，同一入口内完成。 */}
         {showTagFilter && (
           <div ref={aiMenuRef} id="article-ai" className="absolute right-5 top-full mt-1.5 w-[min(18rem,calc(100vw-2.5rem))] p-3 space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] shadow-[0_4px_20px_rgba(0,0,0,0.1)] z-50 max-h-[60dvh] overflow-y-auto">
-            <div className="flex items-center gap-1">
-              <button onClick={() => handleAiQuick('score')} disabled={!!aiQuickTrigger} className="toolbar-button" aria-label="质量打分" title="质量打分">
-                {aiQuickTrigger === 'score' ? <Loader2 size={18} className="animate-spin" /> : <Star size={18} />}
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleAiQuick('score')} disabled={!!aiQuickTrigger} className="toolbar-button !w-auto flex-1 gap-2 px-3 whitespace-nowrap" aria-label="质量打分" title="质量打分">
+                {aiQuickTrigger === 'score' ? <Loader2 size={16} className="animate-spin shrink-0" /> : <Star size={16} className="shrink-0" />}
+                <span>质量打分</span>
               </button>
-              <button onClick={() => handleAiQuick('tags')} disabled={!!aiQuickTrigger} className="toolbar-button" aria-label="提取标签" title="提取标签">
-                {aiQuickTrigger === 'tags' ? <Loader2 size={18} className="animate-spin" /> : <Hash size={18} />}
+              <button onClick={() => handleAiQuick('tags')} disabled={!!aiQuickTrigger} className="toolbar-button !w-auto flex-1 gap-2 px-3 whitespace-nowrap" aria-label="提取标签" title="提取标签">
+                {aiQuickTrigger === 'tags' ? <Loader2 size={16} className="animate-spin shrink-0" /> : <Hash size={16} className="shrink-0" />}
+                <span>提取标签</span>
               </button>
             </div>
             <div className="h-px bg-[var(--color-border)]" />
@@ -762,12 +765,12 @@ export default function ArticleList() {
           </div>
         ) : (
           <>
-            <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-4">
+            <div className="pb-[calc(var(--mobile-tab-height)+1rem+env(safe-area-inset-bottom,0px))] lg:pb-4">
               {articles.map((article) => (
                 <ArticleItem
                   key={article.id}
                   article={article}
-                  selected={selectedArticleId === article.id}
+                  selected={location.pathname === `/article/${article.id}`}
                   onSelect={() => handleSelect(article)}
                   suppressReadStyle={filter.type === 'starred'}
                 />
@@ -825,7 +828,7 @@ ArticleItem({
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(); }
       }}
-      className="article-row page-content-gutter group relative py-[16px] cursor-pointer transition-colors duration-150 overflow-hidden"
+      className="article-row page-content-gutter group relative py-[16px] cursor-pointer overflow-hidden"
     >
       {/* Unread dot */}
       {!suppressReadStyle && !article.isRead && !selected && (

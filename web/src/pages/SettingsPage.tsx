@@ -113,7 +113,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
           <h1 className="page-title">设置</h1>
         </div>
       </header>
-      <div className="flex-1 min-h-0 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <div className="flex-1 min-h-0 overflow-y-auto pb-[calc(var(--mobile-tab-height)+1rem+env(safe-area-inset-bottom))] lg:pb-0">
         <div className="page-content-gutter max-w-3xl w-full py-[20px] space-y-[24px] page-text">
 
         {successMsg && (

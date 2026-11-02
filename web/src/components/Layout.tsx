@@ -7,9 +7,10 @@ import { ChevronLeft, ChevronRight, Library, CircleDot, Search, SlidersHorizonta
 import { cn } from '../lib/utils';
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { sidebarOpen, setSidebarOpen, feeds, filter, setFilter, immersiveMode } = useStore();
+  const { sidebarOpen, setSidebarOpen, filter, setFilter, immersiveMode } = useStore();
   const location = useLocation();
   const navigate = useNavigate();
+  const isArticleRoute = location.pathname.startsWith('/article/');
 
   
   function navTo(type: 'all' | 'unread', path: string) {
@@ -74,12 +75,13 @@ export default function Layout({ children }: { children: ReactNode }) {
         {/* Mobile bottom Tab navigation */}
         <nav
           className={cn(
-            "mobile-tab-bar lg:hidden fixed bottom-0 left-0 right-0 border-t border-[#E8EBF0]/50 dark:border-[#33363D]/80 bg-[#FFFFFF]/95 dark:bg-[#17181A]/95 z-40 transition-[transform,opacity] duration-300 ease-in-out",
-            immersiveMode ? "translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
+            "mobile-tab-bar lg:hidden fixed bottom-0 left-0 right-0 border-t border-[#E8EBF0]/50 dark:border-[#33363D]/80 bg-[#FFFFFF]/95 dark:bg-[#17181A]/95 z-40",
+            isArticleRoute ? "transition-[transform,opacity] duration-300 ease-in-out" : "transition-none",
+            isArticleRoute && immersiveMode ? "translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
           )}
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         >
-          <div className="flex items-stretch h-16">
+          <div className="flex items-stretch h-[calc(var(--mobile-tab-height)-1px)]">
             <BottomTabItem
               icon={<Library size={20} />}
               label="阅读"
@@ -129,23 +131,21 @@ function BottomTabItem({
   return (
     <button
       onClick={onClick}
+      aria-label={label}
+      title={label}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 active:scale-95 relative',
+        'flex-1 flex items-center justify-center transition-colors duration-150 relative',
         active ? 'text-[#3478F6] dark:text-[#82AEFF]' : 'text-[#717784] dark:text-[#959CA8]'
       )}
     >
-      <span className="relative flex items-center justify-center w-11 h-7">
+      <span aria-hidden="true" className="relative flex items-center justify-center w-11 h-11">
         {icon}
         {badge !== undefined && badge > 0 && (
           <span className="absolute -top-1 -right-1.5 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--color-primary)] text-white text-[9px] font-bold flex items-center justify-center px-0.5">
             {badge > 999 ? '999+' : badge}
           </span>
         )}
-      </span>
-
-      <span className="text-[12px] leading-[18px] font-medium transition-colors duration-200">
-        {label}
       </span>
     </button>
   );
