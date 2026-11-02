@@ -137,7 +137,9 @@ export function invalidateArticleCache(id: string) {
   articleDetailCache.delete(id);
 }
 export function cacheArticle(article: Article) {
-  articleDetailCache.set(article.id, article);
+  const cached = articleDetailCache.get(article.id);
+  // 列表仅更新已知状态，不覆盖已经缓存的完整正文。
+  articleDetailCache.set(article.id, cached ? { ...article, content: cached.content } : article);
 }
 
 // 携带 HTTP 状态码的错误类，让调用方可精确判断是否为 401
@@ -197,8 +199,12 @@ export const api = {
     return request<ArticleList>(`/articles?${q}`, signal ? { signal } : undefined);
   },
   getArticle: async (id: string) => {
-    if (articleDetailCache.has(id)) return articleDetailCache.get(id)!;
+    const cached = articleDetailCache.get(id);
+    if (cached?.content != null) return cached;
     const article = await request<Article>(`/articles/${id}`);
+    // 标记已读和详情请求可能并发，保留点击时的已读状态，避免重复扣减未读数。
+    const latest = articleDetailCache.get(id);
+    if (latest) article.isRead = latest.isRead;
     articleDetailCache.set(id, article);
     return article;
   },

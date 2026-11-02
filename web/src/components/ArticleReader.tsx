@@ -822,7 +822,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       >
         {/* Spacer for fixed toolbar on mobile */}
         <div className="ios-pwa-reader-spacer" aria-hidden="true" />
-        <article className={cn('reading-sheet w-full mx-auto px-[28px] md:px-[40px] pt-[16px] pb-[32px] md:py-[40px]', widthPreset.maxW)}>
+        <article className={cn('reading-sheet page-content-gutter w-full mx-auto pt-[16px] pb-[32px] md:py-[40px]', widthPreset.maxW)}>
           {/* Feed + meta */}
           <div className="list-meta flex flex-wrap items-center gap-2 mb-3 text-[#717784] dark:text-[#959CA8]">
             {article.feed_favicon && (

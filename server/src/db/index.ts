@@ -123,6 +123,7 @@ try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_starred_date ON artic
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_read_later_date ON articles(is_read_later, effective_date DESC)'); } catch {}
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_date ON articles(feed_id, effective_date DESC)'); } catch {}
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(effective_date DESC)'); } catch {}
+try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_date_id ON articles(effective_date DESC, id DESC)'); } catch {}
 // 专用于 /api/feeds unreadCount 子查询：WHERE feed_id = ? AND is_read = 0
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_unread ON articles(feed_id, is_read)'); } catch {}
 // url 去重查询：WHERE feed_id = ? AND url = ?

@@ -12,7 +12,7 @@ function toArticle(row: any) {
     guid: row.guid,
     title: row.title,
     summary: row.summary,
-    content: row.content,
+    content: row.content ?? null,
     author: row.author,
     url: row.url,
     publishedAt: row.published_at,
@@ -45,8 +45,8 @@ export async function articleRoutes(app: FastifyInstance) {
       beforeId?: string; // 游标辅助：与 before 配合，处理相同时间戳的多篇文章（联合游标）
     };
   }>('/api/articles', async (req) => {
-    const page = Math.max(1, parseInt(req.query.page || '1'));
-    const limit = Math.min(100, parseInt(req.query.limit || '30'));
+    const page = Math.max(1, parseInt(req.query.page || '1') || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '30') || 30));
     // 使用游标（before）时 offset 固定为 0，游标本身已确定查询起点
     const offset = req.query.before ? 0 : (page - 1) * limit;
 
@@ -89,7 +89,7 @@ export async function articleRoutes(app: FastifyInstance) {
       }
     }
     // total 统计不含游标条件，始终返回当前过滤条件下的全量文章数
-    // 这样前端可以用「累积已加载数量 < total」准确判断是否还有更多文章
+    // 供前端展示文章总数，翻页是否结束由本次返回条数判断。
     const total = (
       sqlite
         .prepare(
@@ -99,26 +99,27 @@ export async function articleRoutes(app: FastifyInstance) {
     ).cnt;
 
     // 游标分页：当翻页时传入 before + beforeId 参数，联合游标防止同时间戳文章被跳过
-    // 排序字段用 COALESCE(published_at, created_at)，数据库无 effective_date 列
-    // 查询条件：sort_date < before 或 (sort_date = before AND id < beforeId)
+    // effective_date 为生成列，直接引用才能使用日期索引；排序包含 id，与联合游标一致。
     if (req.query.before) {
       if (req.query.beforeId) {
-        where += ' AND (COALESCE(a.published_at, a.created_at) < ? OR (COALESCE(a.published_at, a.created_at) = ? AND a.id < ?))';
-        params.push(req.query.before, req.query.before, req.query.beforeId);
+        where += ' AND (a.effective_date, a.id) < (?, ?)';
+        params.push(req.query.before, req.query.beforeId);
       } else {
-        where += ' AND COALESCE(a.published_at, a.created_at) < ?';
+        where += ' AND a.effective_date < ?';
         params.push(req.query.before);
       }
     }
 
     const rows = sqlite
       .prepare(
-        `SELECT a.*, f.title as feed_title, f.favicon as feed_favicon,
-                COALESCE(a.published_at, a.created_at) as effective_date
+        `SELECT a.id, a.feed_id, a.guid, a.title, a.summary, a.author, a.url,
+                a.published_at, a.effective_date, a.is_read, a.is_starred, a.is_read_later,
+                a.ai_score, a.ai_tags, a.created_at,
+                f.title as feed_title, f.favicon as feed_favicon
          FROM articles a
          JOIN feeds f ON f.id = a.feed_id
          WHERE ${where}
-         ORDER BY COALESCE(a.published_at, a.created_at) DESC
+         ORDER BY a.effective_date DESC, a.id DESC
          LIMIT ? OFFSET ?`
       )
       .all(...params, limit, offset);

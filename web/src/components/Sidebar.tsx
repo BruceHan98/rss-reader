@@ -172,26 +172,18 @@ export default function Sidebar() {
   const groupedFeeds = (groupId: string) => feeds.filter((f) => f.groupId === groupId);
 
   return (
-    <div className="sidebar-surface flex flex-col h-full bg-[#F7F8FA] dark:bg-[#17181A]">
+    <div className="sidebar-surface flex flex-col h-full pt-safe pb-safe lg:pt-0 lg:pb-0 bg-[#F7F8FA] dark:bg-[#17181A]">
       {/* Header */}
-      <div className="px-4 py-3.5" style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 0px))' }}>
+      <div className="hidden lg:block px-4 py-3.5" style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 0px))' }}>
         <div className="flex items-center gap-2">
           <img src="/favicon.svg" alt="" className="brand-mark w-6 h-6" />
           <span className="brand-wordmark text-[16px] leading-5 text-[#242424] dark:text-[#E5E7EB]">
             RSS Reader
           </span>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="toolbar-button ml-auto lg:hidden"
-            aria-label="关闭侧栏"
-            title="关闭侧栏"
-          >
-            <X size={18} />
-          </button>
         </div>
       </div>
 
-      <div className="sidebar-divider mx-4 h-px" />
+      <div className="sidebar-divider hidden lg:block mx-4 h-px" />
 
       {/* Nav */}
       <nav className="flex-1 min-h-0 overflow-y-auto py-2 px-2 space-y-1">
@@ -289,8 +281,8 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="sidebar-divider mx-4 h-px" />
-      <div className="px-4 py-2 flex justify-between gap-2">
+      <div className="sidebar-divider hidden lg:block mx-4 h-px" />
+      <div className="hidden lg:flex px-4 py-2 justify-between gap-2">
         <button
           onClick={() => navPage('/digest')}
           className="toolbar-button"
