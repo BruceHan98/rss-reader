@@ -5,7 +5,7 @@ import { zhCN } from 'date-fns/locale';
 import { type DigestItem } from '../lib/api';
 import { useDigestStore } from '../store/digestStore';
 import { cn } from '../lib/utils';
-import { ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Loader2, Newspaper, RefreshCw, AlertCircle, Settings, Sparkles } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Loader2, Newspaper, RefreshCw, AlertCircle, Settings, Sparkles } from 'lucide-react';
 import DigestCalendar from '../components/DigestCalendar';
 
 function todayStr(): string {
@@ -81,87 +81,88 @@ export default function DigestPage() {
   const isGenerating = entry.status === 'generating';
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
+    <div className="flex flex-col h-full bg-[var(--color-bg-card)]">
       {/* Header */}
-      <div className="ios-pwa-top-bar bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 px-4 py-3 flex items-center gap-2 flex-shrink-0 min-h-[3.25rem]">
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Newspaper size={16} className="text-[#5D7052] dark:text-[#7A9A6E] flex-shrink-0" />
-          <h2 className="font-heading font-semibold text-sm text-[#2C2C24] dark:text-[#E8E6DF] truncate">今日日报</h2>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+      <header className="page-header ios-pwa-top-bar">
+        <div className="page-header-row">
+        <h1 className="page-title flex-1 min-w-0 truncate">日报</h1>
           <button
             onClick={() => shiftDate(-1)}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 hover:bg-[#5D7052]/10 hover:text-[#5D7052] transition-all duration-200 active:scale-95"
+            className="toolbar-button shrink-0"
             title="前一天"
+            aria-label="前一天"
           >
-            <ChevronLeft size={15} />
+            <ChevronLeft size={16} />
           </button>
-          <div className="relative">
+          <div className="shrink-0">
             <button
               onClick={() => setShowCalendar((v) => !v)}
-              className={cn(
-                'h-7 px-2.5 rounded-full flex items-center gap-1.5 text-xs font-medium transition-all duration-200 active:scale-95',
-                showCalendar
-                  ? 'bg-[#5D7052]/15 text-[#5D7052]'
-                  : 'text-[#78786C] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
-              )}
+              className="toolbar-button !w-auto !px-[8px]"
+              data-active={showCalendar}
+              aria-label={`选择日期，当前 ${format(dateObj, 'yyyy年M月d日')}`}
+              aria-expanded={showCalendar}
             >
-              <CalendarDays size={13} />
-              {format(dateObj, 'MM-dd')}
+              <span className="sm:hidden">{format(dateObj, 'MM-dd')}</span>
+              <span className="hidden sm:inline">{format(dateObj, 'yyyy-MM-dd')}</span>
             </button>
-            {showCalendar && (
-              <DigestCalendar date={date} onSelect={setDate} onClose={() => setShowCalendar(false)} />
-            )}
           </div>
           <button
             onClick={() => canGoNext && shiftDate(1)}
             disabled={!canGoNext}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 hover:bg-[#5D7052]/10 hover:text-[#5D7052] transition-all duration-200 active:scale-95 disabled:opacity-30 disabled:pointer-events-none"
+            className="toolbar-button shrink-0 disabled:opacity-30 disabled:pointer-events-none"
             title="后一天"
+            aria-label="后一天"
           >
-            <ChevronRight size={15} />
+            <ChevronRight size={16} />
           </button>
           {entry.status === 'ready' && (
             <button
               onClick={() => generateDigest(date, true)}
               disabled={isGenerating}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 hover:bg-[#C18C5D]/15 hover:text-[#C18C5D] transition-all duration-200 active:scale-95 disabled:opacity-40 flex-shrink-0"
+              className="toolbar-button shrink-0 disabled:opacity-40"
               title="重新生成"
+              aria-label="重新生成"
             >
-              <RefreshCw size={13} className={isGenerating ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
             </button>
           )}
         </div>
-      </div>
+        {showCalendar && (
+          <DigestCalendar date={date} onSelect={setDate} onClose={() => setShowCalendar(false)} />
+        )}
+      </header>
 
+      <div className="page-state-content">
       <div
         ref={scrollContainerRef}
         onScroll={(event) => { scrollPositionRef.current = event.currentTarget.scrollTop; }}
-        className="flex-1 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0"
+        className="flex-1 min-h-0 overflow-y-auto"
       >
         {entry.status === 'loading' && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[16rem] gap-3 text-[#78786C]">
-            <Loader2 size={24} className="animate-spin text-[#5D7052]" />
-            <p className="text-xs text-[#78786C]/70">加载中…</p>
+          <div className="page-empty-state">
+            <div className="empty-state-icon">
+              <Loader2 size={28} className="animate-spin" />
+            </div>
+            <p className="page-text font-medium">加载中…</p>
           </div>
         )}
 
         {isGenerating && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[20rem] gap-4 text-[#78786C] px-8">
-            <div className="w-16 h-16 rounded-[40%_60%_60%_40%_/_40%_40%_60%_60%] bg-[#5D7052]/10 dark:bg-[#2E2B25] flex items-center justify-center">
-              <Sparkles size={22} className="text-[#5D7052] animate-pulse" />
+          <div className="page-empty-state">
+            <div className="empty-state-icon">
+              <Sparkles size={28} className="animate-pulse" />
             </div>
             <div className="w-full max-w-[16rem] text-center">
-              <p className="text-sm font-medium text-[#4A4A40] dark:text-[#B0ADA3] mb-3">
+              <p className="page-text font-medium mb-3">
                 {stageLabel(entry.stage)}
               </p>
-              <div className="h-1.5 w-full rounded-full bg-[#E6DCCD]/60 dark:bg-[#2E2B25] overflow-hidden">
+              <div className="h-1.5 w-full rounded-full bg-[var(--color-muted)] overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-[#5D7052] transition-[width] duration-500 ease-out"
+                  className="h-full rounded-full bg-[var(--color-primary)] transition-[width] duration-500 ease-out"
                   style={{ width: `${entry.progress ?? 0}%` }}
                 />
               </div>
-              <p className="text-[11px] text-[#78786C]/60 mt-2">
+              <p className="list-meta mt-2">
                 {entry.stage === 'classifying' && entry.total ? `已分类 ${entry.processed ?? 0} / ${entry.total} 篇 · ` : ''}
                 {Math.round(entry.progress ?? 0)}%
               </p>
@@ -170,63 +171,53 @@ export default function DigestPage() {
         )}
 
         {entry.status === 'not_generated' && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[20rem] gap-4 text-[#78786C] px-6 text-center">
-            <div className="w-20 h-20 rounded-[40%_60%_60%_40%_/_40%_40%_60%_60%] bg-[#5D7052]/10 dark:bg-[#2E2B25] flex items-center justify-center">
-              <Newspaper size={26} className="text-[#5D7052]" />
+          <div className="page-empty-state">
+            <div className="empty-state-icon">
+              <Newspaper size={28} />
             </div>
-            <div>
-              <p className="text-sm font-medium text-[#4A4A40] dark:text-[#B0ADA3]">{dateLabel}还没有生成日报</p>
-              {(entry.articleCount ?? 0) > 0 ? (
-                <p className="text-xs text-[#78786C]/60 mt-1">
-                  当天共 {entry.articleCount} 篇文章，生成将消耗一定 AI 用量
-                </p>
-              ) : (
-                <p className="text-xs text-[#78786C]/60 mt-1">换个日期试试，或先刷新订阅源</p>
-              )}
-            </div>
+            <p className="page-text font-medium">{dateLabel}还没有生成日报</p>
             {(entry.articleCount ?? 0) > 0 && (
-              <button onClick={() => generateDigest(date)} className="btn-primary inline-flex items-center gap-1.5">
-                <Sparkles size={13} /> 生成日报
+              <button onClick={() => generateDigest(date)} className="btn-primary inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0">
+                <Sparkles size={14} className="shrink-0" />
+                <span>生成日报</span>
               </button>
             )}
           </div>
         )}
 
         {entry.status === 'error' && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[20rem] gap-4 text-[#78786C] px-6 text-center">
-            <div className="w-20 h-20 rounded-[40%_60%_60%_40%_/_40%_40%_60%_60%] bg-[#E6DCCD]/50 dark:bg-[#2E2B25] flex items-center justify-center">
-              <AlertCircle size={26} className="text-[#C18C5D]" />
+          <div className="page-empty-state">
+            <div className="empty-state-icon">
+              <AlertCircle size={28} />
             </div>
-            <p className="text-sm font-medium text-[#4A4A40] dark:text-[#B0ADA3]">{entry.error?.message}</p>
+            <p className="page-text font-medium break-words max-w-full">{entry.error?.message}</p>
             {entry.error?.code === 'NO_API_KEY' ? (
               <button
                 onClick={() => navigate('/settings')}
-                className="btn-secondary inline-flex items-center gap-1.5"
+                className="btn-secondary inline-flex items-center justify-center gap-2 whitespace-nowrap"
               >
-                <Settings size={13} /> 前往设置
+                <Settings size={14} className="shrink-0" />
+                <span>前往设置</span>
               </button>
-            ) : entry.error?.code === 'NO_ARTICLES' ? (
-              <p className="text-xs text-[#78786C]/60">换个日期试试，或先刷新订阅源</p>
-            ) : (
+            ) : entry.error?.code === 'NO_ARTICLES' ? null : (
               <button onClick={() => generateDigest(date)} className="btn-secondary">重试</button>
             )}
           </div>
         )}
 
         {entry.status === 'ready' && entry.data && entry.data.categories.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[20rem] gap-3 text-[#78786C]">
-            <Newspaper size={28} className="text-[#5D7052]/40" />
-            <p className="text-sm font-medium">{dateLabel}暂无日报内容</p>
+          <div className="page-empty-state">
+            <div className="empty-state-icon">
+              <Newspaper size={28} />
+            </div>
+            <p className="page-text font-medium">{dateLabel}暂无日报内容</p>
           </div>
         )}
 
         {entry.status === 'ready' && entry.data && entry.data.categories.length > 0 && (
-          <div className="p-4 space-y-3">
-            <div className="flex items-center justify-between px-1 pb-1">
-              <span className="text-xs text-[#78786C] dark:text-[#8A8880]">
-                {dateLabel} · 已整理 <strong className="text-[#5D7052] dark:text-[#7A9A6E]">{entry.data.articleCount}</strong> 篇文章
-              </span>
-              <span className="text-[10px] font-semibold tracking-[0.14em] text-[#C18C5D]">DAILY BRIEF</span>
+          <div>
+            <div className="list-meta page-content-gutter py-3">
+              {dateLabel} · 已整理 {entry.data.articleCount} 篇文章
             </div>
 
             {entry.data.categories.flatMap((cat, ci) => cat.items.map((item, ii) => {
@@ -246,6 +237,7 @@ export default function DigestPage() {
             }))}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -271,7 +263,7 @@ function DigestItemRow({
   onOpenArticle: (id: string) => void;
 }) {
   const multi = item.articles.length > 1;
-  const sourceLabel = multi ? `${item.articles.length} 篇关联原文` : item.articles[0]?.feedTitle ?? '原文速览';
+  const sourceLabel = multi ? `${item.articles.length} 篇关联原文` : item.articles[0]?.feedTitle ?? '原文';
 
   function handleClick() {
     if (multi) {
@@ -282,41 +274,32 @@ function DigestItemRow({
   }
 
   return (
-    <article className={cn(
-      'group relative overflow-hidden rounded-[1.5rem_1.5rem_1.75rem_1.25rem] border border-[#DED8CF]/70 bg-[#FEFEFA]/95 shadow-[0_4px_20px_-8px_rgba(93,112,82,0.24)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-14px_rgba(93,112,82,0.34)] dark:border-[#3A3830] dark:bg-[#232320]',
-      expanded && 'border-[#5D7052]/35 shadow-[0_16px_32px_-14px_rgba(93,112,82,0.30)] dark:border-[#7A9A6E]/35'
-    )}>
-      <div className="pointer-events-none absolute -right-7 -top-8 h-24 w-24 rounded-[40%_60%_65%_35%_/_45%_35%_65%_55%] bg-[#E6DCCD]/50 transition-transform duration-500 group-hover:scale-110 dark:bg-[#5D7052]/10" />
+    <article className="article-row relative overflow-hidden">
       <button
         type="button"
         onClick={handleClick}
-        className="relative block w-full px-4 pb-3 pt-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5D7052]/45"
+        className="relative block w-full py-[16px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
+        aria-label={`${multi ? (expanded ? '收起关联原文' : '查看关联原文') : '阅读原文'}：${item.title}`}
         aria-expanded={multi ? expanded : undefined}
       >
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <span className="inline-flex items-center rounded-full bg-[#5D7052]/10 px-2.5 py-1 text-[10px] font-semibold tracking-[0.12em] text-[#5D7052] dark:bg-[#7A9A6E]/15 dark:text-[#9EBD91]">
-            主题速览
-          </span>
-          <span className="max-w-[9rem] truncate text-[10px] font-medium text-[#78786C] dark:text-[#8A8880]">
-            {sourceLabel}
-          </span>
-        </div>
-        <h3 className="pr-7 text-[15px] font-bold leading-snug text-[#2C2C24] dark:text-[#E8E6DF]">
-          {item.title}
-        </h3>
-        {item.summary && (
-          <p className="mt-2 line-clamp-3 text-xs leading-5 text-[#78786C] dark:text-[#B0ADA3]">
-            {item.summary}
-          </p>
-        )}
-        <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#5D7052] dark:text-[#9EBD91]">
-          {multi ? (expanded ? '收起关联原文' : '查看关联原文') : '阅读原文'}
-          {multi ? (
-            <ChevronDown size={14} className={cn('transition-transform duration-300', expanded && 'rotate-180')} />
-          ) : (
-            <ArrowUpRight size={14} />
+        <div className="page-content-gutter">
+          <span className="list-meta block mb-[6px] truncate">{sourceLabel}</span>
+          <div className="flex items-start gap-2">
+            <h3 className="list-title line-clamp-2 min-w-0 flex-1">
+              {item.title}
+            </h3>
+            {multi ? (
+              <ChevronDown size={16} aria-hidden="true" className={cn('mt-0.5 shrink-0 text-[var(--color-muted-fg)] transition-transform duration-300', expanded && 'rotate-180')} />
+            ) : (
+              <ArrowUpRight size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-muted-fg)]" />
+            )}
+          </div>
+          {item.summary && (
+            <p className="list-summary line-clamp-3 mt-[6px]">
+              {item.summary}
+            </p>
           )}
-        </span>
+        </div>
       </button>
 
       {multi && (
@@ -328,28 +311,26 @@ function DigestItemRow({
           aria-hidden={!expanded}
         >
           <div className="overflow-hidden">
-            <div className="px-4 pb-4">
-              <div className="border-t border-[#DED8CF]/70 pt-3 dark:border-[#3A3830]">
-                <div className="flex items-center justify-between pb-1">
-                  <span className="text-[10px] font-semibold tracking-[0.12em] text-[#78786C] dark:text-[#8A8880]">关联原文</span>
-                  <span className="text-[10px] text-[#78786C]/70 dark:text-[#5A5850]">{item.articles.length} 篇</span>
-                </div>
+            <div className="pb-2">
+              <div className="border-t border-[var(--color-border)]">
                 {item.articles.map((article) => (
                   <button
                     key={article.id}
                     type="button"
                     onClick={() => onOpenArticle(article.id)}
                     tabIndex={expanded ? 0 : -1}
-                    className="group/article flex w-full items-center gap-2 border-t border-[#DED8CF]/45 py-3 text-left first:border-t-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5D7052]/45 focus-visible:ring-offset-2 dark:border-[#3A3830]/80"
+                    aria-label={`阅读原文：${article.title}`}
+                    className="article-row block w-full py-[16px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
                   >
-                    <span className={cn(
-                      'min-w-0 flex-1 text-xs leading-5 transition-colors duration-150 group-hover/article:text-[#5D7052] dark:group-hover/article:text-[#9EBD91]',
-                      article.isRead ? 'text-[#78786C] dark:text-[#8A8880]' : 'font-semibold text-[#2C2C24] dark:text-[#E8E6DF]'
-                    )}>
-                      {article.title}
+                    <span className="page-content-gutter flex items-start gap-2">
+                      <span className="min-w-0 flex-1 pl-2">
+                        <span className="list-meta block mb-[6px] truncate">{article.feedTitle}</span>
+                        <span className={cn('list-title line-clamp-2', article.isRead && '!text-[var(--color-muted-fg)]')}>
+                          {article.title}
+                        </span>
+                      </span>
+                      <ArrowUpRight size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-muted-fg)]" />
                     </span>
-                    <span className="max-w-[5.5rem] truncate text-[10px] text-[#78786C]/70 dark:text-[#5A5850]">{article.feedTitle}</span>
-                    <ArrowUpRight size={13} className="flex-shrink-0 text-[#C18C5D] opacity-0 transition-opacity duration-150 group-hover/article:opacity-100" />
                   </button>
                 ))}
               </div>

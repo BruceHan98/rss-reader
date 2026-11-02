@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Rss, LogIn, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { LogIn, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Props {
@@ -37,23 +37,20 @@ export default function LoginPage({ onLogin }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFCF8] dark:bg-[#1C1C18] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#FFFFFF] dark:bg-[#202124] flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-[#5D7052] flex items-center justify-center shadow-[0_8px_24px_-4px_rgba(93,112,82,0.4)]">
-            <Rss size={22} className="text-[#F3F4F1]" />
-          </div>
+        <div className="flex flex-col items-center gap-5 mb-10">
+          <img src="/favicon.svg" alt="" className="brand-mark w-16 h-16" />
           <div className="text-center">
-            <h1 className="font-heading font-bold text-xl text-[#2C2C24] dark:text-[#E8E6DF] tracking-tight">RSS Reader</h1>
-            <p className="text-sm text-[#78786C] dark:text-[#8A8880] mt-1">请登录以继续</p>
+            <h1 className="brand-wordmark text-[28px] sm:text-[32px] leading-tight text-[#242424] dark:text-[#E5E7EB]">RSS Reader</h1>
           </div>
         </div>
 
         {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/50 dark:border-[#3A3830]/60 rounded-3xl p-7 shadow-[0_4px_24px_-4px_rgba(44,44,36,0.08)] space-y-4"
+          className="space-y-5 px-3"
         >
           {error && (
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#A85448]/8 border border-[#A85448]/20 text-[#A85448] text-sm">
@@ -63,32 +60,35 @@ export default function LoginPage({ onLogin }: Props) {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[#78786C] dark:text-[#5A5850] uppercase tracking-wider">用户名</label>
+            <label htmlFor="login-username" className="text-xs font-medium text-[#717784] dark:text-[#959CA8] uppercase tracking-wider">用户名</label>
             <input
+              id="login-username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="admin"
               autoComplete="username"
-              className="input-field w-full h-10 text-sm px-4"
+              className="input-field w-full h-12 sm:h-11 rounded-xl text-base sm:text-sm px-4"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-[#78786C] dark:text-[#5A5850] uppercase tracking-wider">密码</label>
+            <label htmlFor="login-password" className="text-xs font-medium text-[#717784] dark:text-[#959CA8] uppercase tracking-wider">密码</label>
             <div className="relative">
               <input
+                id="login-password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="请输入密码"
                 autoComplete="current-password"
-                className="input-field w-full h-10 text-sm px-4 pr-10"
+                className="input-field w-full h-12 sm:h-11 rounded-xl text-base sm:text-sm px-4 pr-12"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#78786C] hover:text-[#5D7052] transition-colors"
+                aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center text-[#717784] dark:text-[#959CA8] hover:text-[#3478F6] dark:hover:text-[#82AEFF] transition-colors"
               >
                 {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
@@ -98,15 +98,15 @@ export default function LoginPage({ onLogin }: Props) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-10 rounded-full bg-[#5D7052] text-[#F3F4F1] text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 hover:bg-[#4A5E42] hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.45)] active:scale-[0.98] disabled:opacity-60"
+            className="btn-primary w-full h-12 sm:h-11 flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {loading ? <Loader2 size={15} className="animate-spin" /> : <LogIn size={15} />}
             {loading ? '登录中…' : '登录'}
           </button>
         </form>
 
-        <p className="text-center text-[11px] text-[#78786C]/50 dark:text-[#5A5850]/50 mt-6">
-          首次启动时密码已打印在服务端日志中
+        <p className="text-center text-xs text-[#717784] dark:text-[#959CA8] mt-6 leading-relaxed">
+          {import.meta.env.DEV ? '本地调试：admin / 12345678' : '首次启动时密码已打印在服务端日志中'}
         </p>
       </div>
     </div>

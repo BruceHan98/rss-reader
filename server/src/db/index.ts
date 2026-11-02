@@ -168,8 +168,9 @@ const adminUser = sqlite.prepare('SELECT id FROM users WHERE username = ?').get(
 let adminId: string;
 if (!adminUser) {
   adminId = uuidv4();
-  // 优先使用环境变量 ADMIN_PASSWORD，否则随机生成
-  const rawPassword = process.env.ADMIN_PASSWORD || Math.random().toString(36).slice(2, 10);
+  // 本地开发使用固定密码；生产环境仍优先使用 ADMIN_PASSWORD，否则随机生成。
+  const rawPassword = process.env.ADMIN_PASSWORD
+    || (process.env.NODE_ENV === 'development' ? '12345678' : Math.random().toString(36).slice(2, 10));
   const hash = bcrypt.hashSync(rawPassword, 10);
   sqlite.prepare('INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)').run(
     adminId, 'admin', hash, new Date().toISOString()

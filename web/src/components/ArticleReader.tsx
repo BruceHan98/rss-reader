@@ -5,33 +5,24 @@ import mermaid from 'mermaid';
 import { api, type Article } from '../lib/api';
 import { useStore } from '../store';
 import { formatDate } from '../lib/utils';
-import { ExternalLink, Star, Clock, Loader2, ALargeSmall, AlignJustify, Sparkles, Tag, ArrowLeft, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { ExternalLink, Star, Bookmark, Loader2, ALargeSmall, AlignJustify, Sparkles, Tag, ArrowLeft, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-// Custom organic reading styles injected once
+// Editorial reading styles with shared typography and theme tokens, injected once
 const READER_STYLES = `
   .article-body {
-    font-family: 'Fraunces', 'Georgia', 'Songti SC', 'SimSun', 'Source Han Serif SC', serif;
-    color: #2C2C24;
-    font-size: 1rem;
-    line-height: 1.8;
+    font-family: var(--font-reading);
+    font-weight: 400;
+    color: var(--color-fg);
+    line-height: calc(var(--line-height) + 0.2);
+    letter-spacing: 0.035em;
   }
-  /* 移动端：中文衬线字体（苹方宋体/思源宋体等）在各机型上可用性不一致、笔画偏细，
-     改用系统默认无衬线黑体（iOS 苹方 / 安卓 Noto Sans CJK、MiSans、HarmonyOS Sans 等），
-     英文数字仍保留衬线字体风格 */
-  @media (max-width: 767px) {
-    .article-body {
-      font-family: 'Fraunces', 'Georgia', -apple-system, 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', sans-serif;
-      font-weight: 500;
-    }
-  }
-  .dark .article-body { color: #E8E6DF; }
   .article-body h1,
   .article-body h2,
   .article-body h3,
   .article-body h4 {
-    font-family: 'Fraunces', 'Georgia', 'Songti SC', 'SimSun', 'Source Han Serif SC', serif;
-    color: #2C2C24;
+    font-family: var(--font-ui);
+    color: var(--color-fg);
     margin-top: 2em;
     margin-bottom: 0.6em;
     line-height: 1.3;
@@ -40,7 +31,16 @@ const READER_STYLES = `
   .article-body h1 { font-size: 1.6rem; }
   .article-body h2 { font-size: 1.35rem; }
   .article-body h3 { font-size: 1.15rem; }
-  .article-body p { margin-bottom: 1.2em; text-align: justify; }
+  .article-body p {
+    margin-bottom: 1.5em;
+    text-align: justify;
+    text-align-last: start;
+    text-justify: auto;
+    overflow-wrap: anywhere;
+  }
+  .article-body :is(blockquote, li, pre, code, th, td, figcaption) p,
+  .article-body p:has(> img:only-child),
+  .article-body p:has(> a > img:only-child) { text-align: start; }
   .article-body.indent-paragraphs p { text-indent: 2em; }
   .article-body.indent-paragraphs blockquote p,
   .article-body.indent-paragraphs li p,
@@ -49,16 +49,16 @@ const READER_STYLES = `
   .article-body.indent-paragraphs p:has(> img:only-child),
   .article-body.indent-paragraphs p:has(> a > img:only-child) { text-indent: 0; }
   .article-body a {
-    color: #5D7052;
+    color: var(--color-primary);
     text-decoration: underline;
-    text-decoration-color: #5D7052/40;
-    text-underline-offset: 3px;
+    text-decoration-color: currentColor;
+    text-underline-offset: 4px;
   }
-  .article-body a:hover { text-decoration-color: #5D7052; }
+  .article-body a:hover { text-decoration-color: currentColor; }
 .article-body img {
 max-width: 100%;
-border-radius: 1.25rem;
-box-shadow: 0 4px 20px -2px rgba(93,112,82,0.15);
+border-radius: 0.75rem;
+border: 0;
 margin: 1.5em auto;
 display: block;
 }
@@ -69,10 +69,10 @@ gap: 0.35em;
 margin: 0.6em 0;
 padding: 0.3em 0.75em 0.3em 0.55em;
 border-radius: 99px;
-background: #EDE8E0;
-border: 1px solid #D4CFC8;
-color: #8C887E;
-font-family: 'Nunito', system-ui, sans-serif;
+background: var(--color-accent);
+border: 1px solid var(--color-border);
+color: var(--color-fg-muted);
+font-family: var(--font-ui);
 font-size: 0.75rem;
 font-style: normal;
 font-weight: 500;
@@ -84,26 +84,30 @@ display: block;
 flex-shrink: 0;
 }
   .article-body blockquote {
-    border-left: 3px solid #C18C5D;
-    padding: 0.5em 0 0.5em 1.25em;
+    border-left: 2px solid var(--color-border);
+    padding: 0.25em 0 0.25em 1.25em;
     margin: 1.5em 0;
-    color: #78786C;
-    font-style: italic;
-    background: #F0EBE5/30;
-    border-radius: 0 1rem 1rem 0;
+    color: var(--color-fg-muted);
+    font-style: normal;
+    background: transparent;
   }
   .article-body pre {
-    background: #F0EBE5;
-    border: 1px solid #DED8CF;
+    background: var(--color-muted);
+    border: 1px solid var(--color-border);
     border-radius: 1rem;
     padding: 1.25em 1.5em;
     overflow-x: auto;
     margin: 1.5em 0;
     font-size: 0.875rem;
   }
+  .article-body code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: normal;
+  }
+  .article-body pre, .article-body table, .article-body .mermaid-wrap { letter-spacing: normal; }
   .article-body code:not(pre code) {
-    background: #E6DCCD/60;
-    color: #C18C5D;
+    background: var(--color-accent);
+    color: var(--color-fg);
     padding: 0.15em 0.45em;
     border-radius: 0.4em;
     font-size: 0.875em;
@@ -115,10 +119,11 @@ margin-bottom: 1.2em;
   .article-body li { margin-bottom: 0.4em; }
   .article-body hr {
     border: none;
-    border-top: 1px solid #DED8CF;
+    border-top: 1px solid var(--color-border);
     margin: 2em 0;
   }
   .article-body .table-wrap {
+    background: var(--color-bg-card);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     margin: 1.5em 0;
@@ -130,46 +135,33 @@ margin-bottom: 1.2em;
     font-size: 0.9rem;
   }
   .article-body th {
-    background: #F0EBE5;
-    font-family: 'Fraunces', Georgia, serif;
+    background: var(--color-muted);
+    font-family: var(--font-ui);
+    color: var(--color-fg);
     font-weight: 600;
     padding: 0.6em 1em;
-    border: 1px solid #DED8CF;
+    border: 1px solid var(--color-border);
     text-align: left;
   }
   .article-body td {
     padding: 0.5em 1em;
-    border: 1px solid #DED8CF/60;
+    border: 1px solid var(--color-border);
   }
-  .article-body tr:nth-child(even) td { background: #FDFCF8; }
-  /* Dark mode overrides for reader */
-  .dark .article-body pre { background: #252420; border-color: #3A3830; }
-  .dark .article-body code:not(pre code) { background: rgba(58,56,48,0.7); color: #D4A574; }
-  .dark .article-body blockquote { color: #8A8880; background: rgba(37,36,32,0.5); }
-  .dark .article-body h1, .dark .article-body h2, .dark .article-body h3, .dark .article-body h4 { color: #E8E6DF; }
-  .dark .article-body a { color: #7A9A6E; }
-  .dark .article-body td { border-color: #3A3830; }
-  .dark .article-body th { background: #252420; border-color: #3A3830; color: #E8E6DF; }
-  .dark .article-body tr:nth-child(even) td { background: #1C1C18; }
-  .dark .article-body hr { border-color: #3A3830; }
+  .article-body tr:nth-child(even) td { background: var(--color-bg); }
   /* Mermaid diagram */
   .article-body .mermaid-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     margin: 1.5em 0;
     text-align: center;
-    background: #F7F4EF;
-    border: 1px solid #DED8CF;
+    background: var(--color-muted);
+    border: 1px solid var(--color-border);
     border-radius: 1rem;
     padding: 1.25em 1em;
   }
   .article-body .mermaid-wrap svg {
     max-width: 100%;
     height: auto;
-  }
-  .dark .article-body .mermaid-wrap {
-    background: #252420;
-    border-color: #3A3830;
   }
 `;
 
@@ -181,11 +173,11 @@ const WIDTH_PRESETS = [
 ] as const;
 type WidthKey = typeof WIDTH_PRESETS[number]['key'];
 
-// Font size presets: rem value and label
+// Font size presets scale the reading setting without resizing the interface.
 const FONT_PRESETS = [
-  { key: 'sm', label: '小', size: '0.9375rem' },
-  { key: 'md', label: '中', size: '1.0625rem' },
-  { key: 'lg', label: '大', size: '1.125rem' },
+  { key: 'sm', label: '小', size: 'calc(var(--font-size) * 0.9375)' },
+  { key: 'md', label: '中', size: 'calc(var(--font-size) * 1.0625)' },
+  { key: 'lg', label: '大', size: 'calc(var(--font-size) * 1.125)' },
 ] as const;
 type FontKey = typeof FONT_PRESETS[number]['key'];
 
@@ -504,10 +496,10 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
-        <div className="flex flex-col items-center gap-3 text-[#78786C] dark:text-[#8A8880]">
-          <div className="w-12 h-12 rounded-full bg-[#E6DCCD]/60 dark:bg-[#2E2B25] flex items-center justify-center">
-            <Loader2 size={20} className="animate-spin text-[#5D7052] dark:text-[#7A9A6E]" />
+      <div className="flex items-center justify-center h-full bg-[#F7F8FA] dark:bg-[#17181A]">
+        <div className="flex flex-col items-center gap-3 text-[#717784] dark:text-[#959CA8]">
+          <div className="w-12 h-12 rounded-full bg-[#EAF2FF]/60 dark:bg-[#283449] flex items-center justify-center">
+            <Loader2 size={20} className="animate-spin text-[#3478F6] dark:text-[#82AEFF]" />
           </div>
           <span className="text-sm">加载中…</span>
         </div>
@@ -517,13 +509,13 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   if (!article) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-[#FDFCF8] dark:bg-[#1C1C18] gap-3 text-[#78786C] dark:text-[#8A8880]">
+      <div className="flex flex-col items-center justify-center h-full bg-[#F7F8FA] dark:bg-[#17181A] gap-3 text-[#717784] dark:text-[#959CA8]">
         {loadError === 'network' ? (
           <>
             <p className="text-sm">加载失败，请检查网络连接</p>
             <button
               onClick={fetchArticle}
-              className="px-4 py-2 rounded-full bg-[#5D7052]/10 text-[#5D7052] text-sm font-semibold hover:bg-[#5D7052]/20 active:scale-95 transition-all"
+              className="px-4 py-2 rounded-full bg-[#3478F6]/10 text-[#3478F6] text-sm font-semibold hover:bg-[#3478F6]/20 active:scale-95 transition-all"
             >
               重试
             </button>
@@ -622,27 +614,38 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       }
     }
 
+    // 普通段落不沿用订阅源的内联对齐，让阅读器统一两端对齐。
+    doc.querySelectorAll('p').forEach((paragraph) => {
+      if (paragraph.closest('blockquote, li, pre, code, th, td, figcaption') ||
+          paragraph.querySelector('img, video, iframe')) return;
+      paragraph.style.removeProperty('text-align');
+      paragraph.style.removeProperty('text-align-last');
+      paragraph.removeAttribute('align');
+    });
+
     return doc.body.innerHTML;
   })();
 
   return (
     <div
-      className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18] overflow-hidden"
+      className="reading-surface flex flex-col h-full bg-[#F7F8FA] dark:bg-[#17181A] overflow-hidden"
       onClick={(e) => { const t=e.target as HTMLElement; if (t.closest("button,a")) return; setShowWidthPicker(false); setShowFontPicker(false); if (window.innerWidth < 768) { if (!isScrolling.current) setImmersiveMode(false); } }}
     >
       {/* Toolbar: fixed on mobile, static on desktop */}
       <div className={cn(
-        "ios-pwa-top-bar border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FDFCF8]/90 dark:bg-[#1C1C18]/95 backdrop-blur-sm z-30",
+        "ios-pwa-top-bar border-b border-[#E8EBF0] dark:border-[#33363D] bg-[#FFFFFF] dark:bg-[#202124] z-30",
         "fixed top-0 left-0 right-0 transition-[transform,opacity] duration-300 ease-in-out",
         "md:static md:flex-shrink-0 md:translate-y-0 md:opacity-100",
         immersiveMode ? "-translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
       )}>
-        <div className={cn('mx-auto px-4 md:px-6 py-3.5 flex items-center gap-2', widthPreset.maxW)}>
+        <div className={cn('mx-auto px-4 md:px-6 py-[8px] flex items-center gap-1 sm:gap-2', widthPreset.maxW)}>
           {/* Mobile back button */}
           {onBack && (
             <button
               onClick={onBack}
-              className="md:hidden w-8 h-8 rounded-full flex items-center justify-center text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0 -ml-1"
+              className="toolbar-button md:hidden"
+              aria-label="返回"
+              title="返回"
             >
               <ArrowLeft size={18} />
             </button>
@@ -651,29 +654,25 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           <button
             onClick={handleStar}
             disabled={starPending}
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed',
-              article.isStarred
-                ? 'bg-[#C18C5D]/15 text-[#C18C5D]'
-                : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#C18C5D]/15 hover:text-[#C18C5D]'
-            )}
+            className="toolbar-button disabled:opacity-60 disabled:cursor-not-allowed"
+            data-active={article.isStarred}
+            aria-pressed={article.isStarred}
+            aria-label={article.isStarred ? '取消收藏' : '收藏'}
+            title={article.isStarred ? '取消收藏' : '收藏'}
           >
-            <Star size={14} fill={article.isStarred ? 'currentColor' : 'none'} />
-            <span className="hidden sm:inline">{article.isStarred ? '已收藏' : '收藏'}</span>
+            <Star size={18} fill={article.isStarred ? 'currentColor' : 'none'} />
           </button>
 
           <button
             onClick={handleReadLater}
             disabled={readLaterPending}
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed',
-              article.isReadLater
-                ? 'bg-[#5D7052]/15 text-[#5D7052]'
-                : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#5D7052]/15 hover:text-[#5D7052]'
-            )}
+            className="toolbar-button disabled:opacity-60 disabled:cursor-not-allowed"
+            data-active={article.isReadLater}
+            aria-pressed={article.isReadLater}
+            aria-label={article.isReadLater ? '取消稍后阅读' : '稍后阅读'}
+            title={article.isReadLater ? '取消稍后阅读' : '稍后阅读'}
           >
-            <Clock size={14} />
-            <span className="hidden sm:inline">{article.isReadLater ? '稍后阅读' : '稍后'}</span>
+            <Bookmark size={18} />
           </button>
 
           {article.url && (
@@ -681,10 +680,11 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
               href={article.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] transition-all duration-200 hover:bg-[#5D7052] hover:text-[#F3F4F1] hover:scale-105 active:scale-95"
+              className="toolbar-button"
+              aria-label="阅读原文（新窗口打开）"
+              title="阅读原文（新窗口打开）"
             >
-              <ExternalLink size={14} />
-              <span className="hidden sm:inline">原文</span>
+              <ExternalLink size={18} />
             </a>
           )}
 
@@ -692,35 +692,30 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           <div className="flex-1" />
 
           {/* Font size picker */}
-          <div className="relative">
+          <div className="relative sm:border-l sm:border-[var(--color-border)] sm:pl-2">
             <button
               onClick={(e) => { e.stopPropagation(); setShowFontPicker((v) => !v); setShowWidthPicker(false); }}
-              className={cn(
-                'flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
-                showFontPicker
-                  ? 'bg-[#5D7052]/15 text-[#5D7052]'
-                  : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
-              )}
+              className="toolbar-button"
+              data-active={showFontPicker}
+              aria-expanded={showFontPicker}
+              aria-label="字体大小"
               title="字体大小"
             >
-              <ALargeSmall size={14} />
-              <span className="hidden sm:inline">{fontPreset.label}</span>
+              <ALargeSmall size={18} />
             </button>
             {showFontPicker && (
               <div
-                className="absolute right-0 top-full mt-1.5 bg-[#FEFEFA] dark:bg-[#252420] border border-[#DED8CF]/60 rounded-2xl shadow-[0_8px_24px_-4px_rgba(93,112,82,0.15)] z-50 overflow-hidden"
+                className="action-menu absolute right-0 top-full mt-1.5 z-50"
                 onClick={(e) => e.stopPropagation()}
               >
                 {FONT_PRESETS.map((p) => (
                   <button
                     key={p.key}
                     onClick={() => handleSetFont(p.key)}
-                    className={cn(
-                      'flex items-center gap-2.5 w-full px-4 py-2 text-xs font-semibold transition-colors whitespace-nowrap',
-                      fontKey === p.key
-                        ? 'bg-[#5D7052]/10 text-[#5D7052]'
-                        : 'text-[#78786C] hover:bg-[#F0EBE5] dark:hover:bg-[#2E2B25]'
-                    )}
+                    className="action-menu-item w-full whitespace-nowrap"
+                    aria-pressed={fontKey === p.key}
+                    aria-label={`${p.label}号字体`}
+                    style={fontKey === p.key ? { color: 'var(--color-primary)', backgroundColor: 'var(--color-accent)' } : undefined}
                   >
                     <span style={{ fontSize: p.size, lineHeight: 1 }} className="font-serif">A</span>
                     <span>{p.label}</span>
@@ -734,32 +729,27 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setShowWidthPicker((v) => !v); setShowFontPicker(false); }}
-              className={cn(
-                'flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95',
-                showWidthPicker
-                  ? 'bg-[#5D7052]/15 text-[#5D7052]'
-                  : 'bg-[#E6DCCD]/50 dark:bg-[#2E2B25] text-[#78786C] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
-              )}
+              className="toolbar-button"
+              data-active={showWidthPicker}
+              aria-expanded={showWidthPicker}
+              aria-label="展示宽度"
               title="展示宽度"
             >
-              <AlignJustify size={14} />
-              <span className="hidden sm:inline">{widthPreset.label}</span>
+              <AlignJustify size={18} />
             </button>
             {showWidthPicker && (
               <div
-                className="absolute right-0 top-full mt-1.5 bg-[#FEFEFA] dark:bg-[#252420] border border-[#DED8CF]/60 rounded-2xl shadow-[0_8px_24px_-4px_rgba(93,112,82,0.15)] z-50 overflow-hidden"
+                className="action-menu absolute right-0 top-full mt-1.5 z-50"
                 onClick={(e) => e.stopPropagation()}
               >
                 {WIDTH_PRESETS.map((p) => (
                   <button
                     key={p.key}
                     onClick={() => handleSetWidth(p.key)}
-                    className={cn(
-                      'flex items-center gap-3 w-full px-4 py-2 text-xs font-semibold transition-colors whitespace-nowrap',
-                      widthKey === p.key
-                        ? 'bg-[#5D7052]/10 text-[#5D7052]'
-                        : 'text-[#78786C] hover:bg-[#F0EBE5] dark:hover:bg-[#2E2B25]'
-                    )}
+                    className="action-menu-item w-full whitespace-nowrap"
+                    aria-pressed={widthKey === p.key}
+                    aria-label={`${p.label}展示宽度`}
+                    style={widthKey === p.key ? { color: 'var(--color-primary)', backgroundColor: 'var(--color-accent)' } : undefined}
                   >
                     {/* Width visual indicator */}
                     <span className="flex gap-0.5 items-center">
@@ -810,9 +800,9 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       >
         {/* Spacer for fixed toolbar on mobile */}
         <div className="ios-pwa-reader-spacer h-14 md:hidden" />
-        <article className={cn('mx-auto px-6 py-10', widthPreset.maxW)}>
+        <article className={cn('reading-sheet mx-auto px-[32px] md:px-[48px] py-[32px] md:py-[40px]', widthPreset.maxW)}>
           {/* Feed + meta */}
-          <div className="flex items-center gap-2 mb-5">
+          <div className="list-meta flex flex-wrap items-center gap-2 mb-3 text-[#717784] dark:text-[#959CA8]">
             {article.feed_favicon && (
               <img
                 src={article.feed_favicon}
@@ -821,34 +811,27 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
             )}
-            <span className="text-xs font-semibold text-[#5D7052] dark:text-[#7A9A6E]">{article.feed_title}</span>
+            <span>{article.feed_title}</span>
             {article.author && (
               <>
-                <span className="text-[#DED8CF] dark:text-[#3A3830]">·</span>
-                <span className="text-xs text-[#78786C] dark:text-[#8A8880]">{article.author}</span>
+                <span className="text-[#E8EBF0] dark:text-[#33363D]">·</span>
+                <span>{article.author}</span>
               </>
             )}
-            <span className="text-[#DED8CF] dark:text-[#3A3830]">·</span>
-            <span className="text-xs text-[#78786C] dark:text-[#8A8880]">{formatDate(article.publishedAt)}</span>
+            <span className="text-[#E8EBF0] dark:text-[#33363D]">·</span>
+            <span>{formatDate(article.publishedAt)}</span>
           </div>
 
           {/* Title */}
-          <h1 className="font-heading font-bold text-2xl leading-snug mb-4 text-[#2C2C24] dark:text-[#E8E6DF]">
+          <h1 className="reader-title mb-4 text-[#242424] dark:text-[#E5E7EB]">
             {article.title}
           </h1>
 
           {/* AI score + tags */}
           {(article.aiScore !== null || (article.aiTags && article.aiTags.length > 0)) && (
-            <div className="flex items-center flex-wrap gap-1.5 mb-6">
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mb-4 text-xs text-[#717784] dark:text-[#959CA8]">
               {article.aiScore !== null && (
-                <span className={cn(
-                  'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold',
-                  article.aiScore >= 7
-                    ? 'bg-[#5D7052]/12 text-[#5D7052]'
-                    : article.aiScore >= 4
-                    ? 'bg-[#C18C5D]/12 text-[#C18C5D]'
-                    : 'bg-[#A85448]/12 text-[#A85448]'
-                )}>
+                <span className="inline-flex items-center gap-1">
                   <Sparkles size={10} />
                   质量 {article.aiScore} / 10
                 </span>
@@ -856,7 +839,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
               {article.aiTags?.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E6DCCD]/70 dark:bg-[#2E2B25] text-[#78786C] dark:text-[#8A8880] text-xs font-medium"
+                  className="inline-flex items-center gap-1"
                 >
                   <Tag size={9} />
                   {tag}
@@ -866,7 +849,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           )}
 
           {/* Divider */}
-          <div className="h-px bg-[#E8E4DC] dark:bg-[#2E2B25] mb-8" />
+          <div className="reading-rule h-px mb-6" />
 
           {/* Content */}
           {safeContent ? (
@@ -881,16 +864,16 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
             />
           ) : (
             <div className="text-center py-14">
-              <div className="w-20 h-20 rounded-[40%_60%_60%_40%_/_40%_40%_60%_60%] bg-[#E6DCCD]/60 dark:bg-[#2E2B25] mx-auto mb-5 flex items-center justify-center">
-                <ExternalLink size={24} className="text-[#5D7052]/60" />
+              <div className="w-20 h-20 rounded-2xl bg-[#EAF2FF]/60 dark:bg-[#283449] mx-auto mb-5 flex items-center justify-center">
+                <ExternalLink size={24} className="text-[#3478F6]/60" />
               </div>
-              <p className="text-[#78786C] dark:text-[#8A8880] mb-5 text-sm">此订阅源未提供完整内容</p>
+              <p className="text-[#717784] dark:text-[#959CA8] mb-5 text-sm">此订阅源未提供完整内容</p>
               {article.url && (
                 <a
                   href={article.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#5D7052] text-[#F3F4F1] text-sm font-semibold shadow-[0_4px_20px_-2px_rgba(93,112,82,0.15)] hover:shadow-[0_6px_24px_-4px_rgba(93,112,82,0.25)] hover:scale-105 active:scale-95 transition-all duration-300"
+                  className="btn-primary inline-flex items-center gap-2"
                 >
                   <ExternalLink size={14} />
                   阅读原文
@@ -931,10 +914,10 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           className={cn(
             'fixed bottom-20 lg:bottom-5 left-1/2 -translate-x-1/2 z-50',
             'flex items-center gap-2.5 px-4 py-3 rounded-2xl',
-            'shadow-[0_8px_24px_-4px_rgba(44,44,36,0.18)]',
+            'shadow-[0_8px_24px_-4px_rgba(36,36,36,0.18)]',
             'text-sm font-medium min-w-[200px] max-w-[300px]',
             'animate-[slideUp_0.2s_ease-out]',
-            toast.type === 'success' ? 'bg-[#5D7052] text-[#F3F4F1]' : 'bg-[#A85448] text-white'
+            toast.type === 'success' ? 'bg-[#3478F6] text-[#FFFFFF]' : 'bg-[#A85448] text-white'
           )}
         >
           {toast.type === 'success'

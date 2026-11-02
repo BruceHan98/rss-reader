@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, cacheArticle, type Article, type AiTag } from '../lib/api';
 import { cn, relativeTime } from '../lib/utils';
-import { CheckCheck, Loader2, Leaf, RefreshCw, Sparkles, Tag, X, Star, Hash, Menu, Rss, CheckCircle, AlertCircle, CircleDot } from 'lucide-react';
+import { CheckCheck, Loader2, BookOpen, RefreshCw, Sparkles, Tag, X, Star, Hash, PanelLeft, CheckCircle, AlertCircle, MoreHorizontal } from 'lucide-react';
 import FeedIcon from './FeedIcon';
 
 const PAGE_SIZE = 30;
@@ -36,6 +36,9 @@ export default function ArticleList() {
   const [showTagFilter, setShowTagFilter] = useState(false);
   const [showMarkReadMenu, setShowMarkReadMenu] = useState(false);
   const markReadMenuRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const aiMenuRef = useRef<HTMLDivElement>(null);
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [total, setTotal] = useState(0);
@@ -99,17 +102,27 @@ export default function ArticleList() {
     api.getAiTags().then((r) => setAllTags(r.tags)).catch(() => {});
   }, []);
 
-  // 点击「标为已读」下拉菜单外部时关闭
+  // 菜单支持点击外部或 Escape 关闭。
   useEffect(() => {
-    if (!showMarkReadMenu) return;
+    if (!showMarkReadMenu && !showTagFilter) return;
     function onDocClick(e: MouseEvent) {
-      if (markReadMenuRef.current && !markReadMenuRef.current.contains(e.target as Node)) {
-        setShowMarkReadMenu(false);
-      }
+      if (markReadMenuRef.current && !markReadMenuRef.current.contains(e.target as Node)) setShowMarkReadMenu(false);
+      if (aiMenuRef.current && !aiMenuRef.current.contains(e.target as Node) && !filterButtonRef.current?.contains(e.target as Node)) setShowTagFilter(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      if (showMarkReadMenu) moreButtonRef.current?.focus();
+      else filterButtonRef.current?.focus();
+      setShowMarkReadMenu(false);
+      setShowTagFilter(false);
     }
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [showMarkReadMenu]);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showMarkReadMenu, showTagFilter]);
 
   // 监听文章被阅读事件，更新本地列表 isRead 状态
   useEffect(() => {
@@ -557,151 +570,120 @@ export default function ArticleList() {
     filter.type === 'unread' ? '未读' :
     filter.type === 'starred' ? '已收藏' :
     filter.type === 'read-later' ? '稍后阅读' :
-    filter.type === 'group' ? (groups.find(g => g.id === filter.groupId)?.name ?? '分组') : '';
+    filter.type === 'group' ? (groups.find(g => g.id === filter.groupId)?.name ?? '分组') :
+    (feeds.find(f => f.id === filter.feedId)?.title ?? '文章');
 
   const hasAiFilter = minScore > 0 || selectedTags.length > 0;
   const canShowUnreadFilter = filter.type === 'feed' || filter.type === 'group';
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
-      {/* Mobile top header */}
-      <div className="ios-pwa-top-bar lg:hidden flex items-center gap-3 px-4 py-3 border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60 bg-[#FEFEFA]/90 dark:bg-[#1C1C18]/90 backdrop-blur-sm flex-shrink-0">
-        <div className="flex items-center gap-2 flex-1">
-          <div className="w-6 h-6 rounded-full bg-[#5D7052] flex items-center justify-center">
-            <Rss size={12} className="text-[#F3F4F1]" />
-          </div>
-          <span className="font-heading font-semibold text-sm text-[#2C2C24]">RSS Reader</span>
-        </div>
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95"
-        >
-          <Menu size={18} />
-        </button>
-      </div>
-
+    <div className="article-list-surface flex flex-col h-full bg-[#FFFFFF] dark:bg-[#202124]">
       {/* Header */}
-      <div className="px-4 py-3.5 border-b border-[#DED8CF]/50 dark:border-[#3A3830]/60">
-        <div className="flex items-center justify-between">
-          <div className="flex items-baseline gap-2 min-w-0">
-            <h2 className="font-heading font-semibold text-sm text-[#2C2C24] dark:text-[#E8E6DF] flex-shrink-0">{title}</h2>
-            <span className="text-[11px] text-[#78786C]/60 dark:text-[#5A5850]">{(filter.type === 'unread' || showUnreadOnly) ? displayTotal : total} 篇</span>
+      <div className="page-header ios-pwa-top-bar">
+        <div className="page-header-row">
+          <div className="flex items-baseline gap-2 min-w-0 flex-1">
+            <h2 className="page-title truncate">{title}</h2>
+            <span className="list-meta flex-shrink-0">{(filter.type === 'unread' || showUnreadOnly) ? displayTotal : total} 篇</span>
           </div>
-          <div className="flex items-center gap-1">
-            {/* 拉取消息 */}
-            {(filter.type === 'all' || filter.type === 'feed' || filter.type === 'group') && (
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052] active:scale-95 flex-shrink-0 disabled:opacity-40"
-                title={filter.type === 'feed' ? '刷新该订阅源' : '刷新所有订阅'}
-              >
-                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-              </button>
-            )}
-            {/* 只看未读 */}
-            {canShowUnreadFilter && (
-              <button
-                onClick={() => setShowUnreadOnly((v) => !v)}
-                className={cn(
-                  'w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 flex-shrink-0',
-                  showUnreadOnly
-                    ? 'bg-[#5D7052]/15 text-[#5D7052]'
-                    : 'text-[#78786C]/60 dark:text-[#5A5850] hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
-                )}
-                title={showUnreadOnly ? '显示全部文章' : '只看未读'}
-              >
-                <CircleDot size={13} strokeWidth={showUnreadOnly ? 2.5 : 1.75} />
-              </button>
-            )}
-            {/* 打分 */}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="切换订阅侧栏"
+            title="订阅侧栏"
+            className="toolbar-button lg:hidden"
+          >
+            <PanelLeft size={18} />
+          </button>
+          {(filter.type === 'all' || filter.type === 'feed' || filter.type === 'group') && (
             <button
-              onClick={() => handleAiQuick('score')}
-              disabled={!!aiQuickTrigger}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#C18C5D]/15 hover:text-[#C18C5D] active:scale-95 flex-shrink-0 disabled:opacity-40"
-              title="质量打分"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="toolbar-button"
+              title={filter.type === 'feed' ? '刷新该订阅源' : '刷新所有订阅'}
+              aria-label={filter.type === 'feed' ? '刷新该订阅源' : '刷新所有订阅'}
             >
-              {aiQuickTrigger === 'score' ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
+              <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
             </button>
-            {/* 打标签 */}
+          )}
+          <button
+            ref={filterButtonRef}
+            onClick={() => { setShowTagFilter((v) => !v); setShowMarkReadMenu(false); }}
+            className="toolbar-button"
+            data-active={hasAiFilter || showTagFilter}
+            aria-expanded={showTagFilter}
+            aria-controls="article-ai"
+            aria-label="AI 打分、标签与筛选"
+            title="AI 打分、标签与筛选"
+          >
+            {aiQuickTrigger ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+          </button>
+          <div className="relative" ref={markReadMenuRef}>
             <button
-              onClick={() => handleAiQuick('tags')}
-              disabled={!!aiQuickTrigger}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C]/60 transition-all duration-200 hover:bg-[#C18C5D]/15 hover:text-[#C18C5D] active:scale-95 flex-shrink-0 disabled:opacity-40"
-              title="标签提取"
+              ref={moreButtonRef}
+              onClick={() => { setShowMarkReadMenu((v) => !v); setShowTagFilter(false); }}
+              className="toolbar-button"
+              data-active={showMarkReadMenu}
+              aria-expanded={showMarkReadMenu}
+              aria-controls="article-actions"
+              aria-label="更多操作"
+              title="更多操作"
             >
-              {aiQuickTrigger === 'tags' ? <Loader2 size={13} className="animate-spin" /> : <Hash size={13} />}
+              <MoreHorizontal size={18} />
             </button>
-            {/* 筛选 */}
-            <button
-              onClick={() => setShowTagFilter((v) => !v)}
-              className={cn(
-                'w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 flex-shrink-0',
-                hasAiFilter || showTagFilter
-                  ? 'bg-[#5D7052]/15 text-[#5D7052]'
-                  : 'text-[#78786C]/60 hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
-              )}
-              title="AI 筛选"
-            >
-              <Sparkles size={13} />
-            </button>
-            {/* 全部标记已读（含按时间批量已读） */}
-            <div className="relative" ref={markReadMenuRef}>
-              <button
-                onClick={() => setShowMarkReadMenu((v) => !v)}
-                className={cn(
-                  'w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 flex-shrink-0',
-                  showMarkReadMenu
-                    ? 'bg-[#5D7052]/15 text-[#5D7052]'
-                    : 'text-[#78786C]/60 hover:bg-[#5D7052]/10 hover:text-[#5D7052]'
-                )}
-                title="标为已读"
-              >
-                <CheckCheck size={14} />
-              </button>
-              {showMarkReadMenu && (
-                <div className="absolute right-0 top-full mt-1.5 bg-[#FEFEFA] dark:bg-[#252420] border border-[#DED8CF]/60 rounded-2xl shadow-[0_8px_24px_-4px_rgba(93,112,82,0.15)] z-50 overflow-hidden min-w-[9.5rem]">
-                  <button
-                    onClick={() => handleMarkAllRead()}
-                    className="flex items-center w-full px-4 py-2 text-xs font-semibold text-[#78786C] hover:bg-[#F0EBE5] dark:hover:bg-[#2E2B25] transition-colors whitespace-nowrap"
-                  >
-                    全部标为已读
+            {showMarkReadMenu && (
+              <div id="article-actions" className="action-menu">
+                <p className="action-menu-label">批量已读</p>
+                <button onClick={() => handleMarkAllRead()} className="action-menu-item">
+                  <CheckCheck size={14} />全部标为已读
+                </button>
+                {[3, 7, 14].map((days) => (
+                  <button key={days} onClick={() => handleMarkAllRead(days)} className="action-menu-item">
+                    <span className="w-3.5" />{days} 天前标为已读
                   </button>
-                  <div className="h-px bg-[#DED8CF]/60 dark:bg-[#3A3830] mx-2" />
-                  {[3, 7, 14].map((days) => (
-                    <button
-                      key={days}
-                      onClick={() => handleMarkAllRead(days)}
-                      className="flex items-center w-full px-4 py-2 text-xs font-semibold text-[#78786C] hover:bg-[#F0EBE5] dark:hover:bg-[#2E2B25] transition-colors whitespace-nowrap"
-                    >
-                      {days} 天前的标为已读
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                ))}
+                {canShowUnreadFilter && (
+                  <>
+                    <div className="h-px bg-[var(--color-border)] mx-2 my-1" />
+                    <label className="action-menu-item justify-between cursor-pointer">
+                      只看未读
+                      <input type="checkbox" checked={showUnreadOnly} onChange={(event) => setShowUnreadOnly(event.target.checked)} className="w-4 h-4 accent-[#3478F6]" />
+                    </label>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* AI filter panel */}
+        {/* AI 分析后按评分与标签筛选，同一入口内完成。 */}
         {showTagFilter && (
-          <div className="mt-2.5 space-y-2.5">
+          <div ref={aiMenuRef} id="article-ai" className="absolute right-5 top-full mt-1.5 w-[min(18rem,calc(100vw-2.5rem))] p-3 space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] shadow-[0_4px_20px_rgba(0,0,0,0.1)] z-50 max-h-[60dvh] overflow-y-auto">
+            <div className="flex items-center gap-1">
+              <button onClick={() => handleAiQuick('score')} disabled={!!aiQuickTrigger} className="toolbar-button" aria-label="质量打分" title="质量打分">
+                {aiQuickTrigger === 'score' ? <Loader2 size={18} className="animate-spin" /> : <Star size={18} />}
+              </button>
+              <button onClick={() => handleAiQuick('tags')} disabled={!!aiQuickTrigger} className="toolbar-button" aria-label="提取标签" title="提取标签">
+                {aiQuickTrigger === 'tags' ? <Loader2 size={18} className="animate-spin" /> : <Hash size={18} />}
+              </button>
+            </div>
+            <div className="h-px bg-[var(--color-border)]" />
+            <p className="list-meta">筛选</p>
             {/* Score filter */}
             <div className="flex items-center gap-2.5">
-              <span className="text-[11px] text-[#78786C] dark:text-[#8A8880] whitespace-nowrap flex-shrink-0">最低分</span>
+              <span className="text-[11px] text-[#717784] dark:text-[#959CA8] whitespace-nowrap flex-shrink-0">最低分</span>
               <input
+                aria-label="最低评分"
                 type="range"
                 min={0}
                 max={10}
                 value={minScore}
                 onChange={(e) => setMinScore(Number(e.target.value))}
-                className="flex-1 h-1.5 accent-[#5D7052] cursor-pointer"
+                className="flex-1 h-1.5 accent-[#3478F6] cursor-pointer"
               />
-              <span className="text-[11px] font-semibold text-[#5D7052] dark:text-[#7A9A6E] w-5 text-right flex-shrink-0">{minScore}</span>
+              <span className="text-[11px] font-semibold text-[#3478F6] dark:text-[#82AEFF] w-5 text-right flex-shrink-0">{minScore}</span>
               {minScore > 0 && (
                 <button
                   onClick={() => setMinScore(0)}
-                  className="w-4 h-4 rounded-full flex items-center justify-center text-[#78786C]/50 hover:text-[#A85448] transition-colors"
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[#717784]/50 hover:text-[#A85448] transition-colors"
                 >
                   <X size={10} />
                 </button>
@@ -712,12 +694,12 @@ export default function ArticleList() {
             {allTags.length > 0 && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
-                  <Tag size={10} className="text-[#78786C]/60" />
-                  <span className="text-[11px] text-[#78786C] dark:text-[#8A8880]">按标签筛选</span>
+                  <Tag size={10} className="text-[#717784]/60" />
+                  <span className="text-[11px] text-[#717784] dark:text-[#959CA8]">按标签筛选</span>
                   {selectedTags.length > 0 && (
                     <button
                       onClick={() => setSelectedTags([])}
-                      className="ml-auto text-[10px] text-[#78786C]/50 hover:text-[#A85448] transition-colors"
+                      className="ml-auto text-[10px] text-[#717784]/50 hover:text-[#A85448] transition-colors"
                     >
                       清除
                     </button>
@@ -731,8 +713,8 @@ export default function ArticleList() {
                       className={cn(
                         'px-2 py-0.5 rounded-full text-[10px] font-medium transition-all duration-200 active:scale-95',
                         selectedTags.includes(tag)
-                          ? 'bg-[#5D7052] text-white'
-                          : 'bg-[#E6DCCD]/60 text-[#78786C] hover:bg-[#5D7052]/15 hover:text-[#5D7052]'
+                          ? 'bg-[#3478F6] text-white'
+                          : 'bg-[#EAF2FF]/60 text-[#717784] hover:bg-[#3478F6]/15 hover:text-[#3478F6]'
                       )}
                     >
                       {tag}
@@ -749,14 +731,14 @@ export default function ArticleList() {
         {!showTagFilter && hasAiFilter && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {minScore > 0 && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#5D7052]/10 text-[10px] text-[#5D7052] font-medium">
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#3478F6]/10 text-[10px] text-[#3478F6] font-medium">
                 <Sparkles size={9} />
                 分数 ≥ {minScore}
                 <button onClick={() => setMinScore(0)} className="hover:text-[#A85448] transition-colors"><X size={9} /></button>
               </span>
             )}
             {selectedTags.map((tag) => (
-              <span key={tag} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#C18C5D]/10 text-[10px] text-[#C18C5D] font-medium">
+              <span key={tag} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-accent)] text-[10px] text-[var(--color-primary)] font-medium">
                 <Tag size={9} />
                 {tag}
                 <button onClick={() => toggleTag(tag)} className="hover:text-[#A85448] transition-colors"><X size={9} /></button>
@@ -767,23 +749,20 @@ export default function ArticleList() {
       </div>
 
         {/* List */}
-      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 bg-[#FDFCF8] dark:bg-[#1C1C18] ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
+      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 bg-[#FFFFFF] dark:bg-[#202124] ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
         {articles.length === 0 && !loading ? (
-          <div className="flex flex-col items-center justify-center h-full pb-[3.5rem] lg:pb-0 gap-3 text-[#78786C]">
-            <div
-              className="w-24 h-24 bg-[#E6DCCD]/60 flex items-center justify-center"
-              style={{ borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' }}
-            >
-              <Leaf size={32} className="text-[#5D7052]/40" />
+          <div className="flex flex-col items-center justify-center h-full pb-[3.5rem] lg:pb-0 gap-3 text-[#717784]">
+            <div className="empty-state-icon w-20 h-20">
+              <BookOpen size={28} />
             </div>
             <p className="text-sm font-medium">暂无文章</p>
-            <p className="text-xs text-[#78786C]/70 dark:text-[#5A5850]">
+            <p className="text-xs text-[#717784]/70 dark:text-[#959CA8]">
               {hasAiFilter ? '尝试调整 AI 筛选条件' : '添加订阅源后内容将出现在这里'}
             </p>
           </div>
         ) : (
           <>
-            <div className="px-2.5 pt-2.5 pb-[3.5rem] lg:pb-2.5 space-y-1.5">
+            <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-4">
               {articles.map((article) => (
                 <ArticleItem
                   key={article.id}
@@ -795,7 +774,7 @@ export default function ArticleList() {
               ))}
             </div>
             <div ref={loaderRef} className="py-4 flex justify-center">
-              {loading && <Loader2 size={18} className="animate-spin text-[#5D7052]/50" />}
+              {loading && <Loader2 size={18} className="animate-spin text-[#3478F6]/50" />}
             </div>
           </>
         )}
@@ -806,10 +785,10 @@ export default function ArticleList() {
           className={cn(
             'fixed bottom-20 lg:bottom-5 left-1/2 -translate-x-1/2 z-50',
             'flex items-center gap-2.5 px-4 py-3 rounded-2xl',
-            'shadow-[0_8px_24px_-4px_rgba(44,44,36,0.18)]',
+            'shadow-[0_8px_24px_-4px_rgba(36,36,36,0.18)]',
             'text-sm font-medium min-w-[240px] max-w-[320px]',
             'animate-[slideUp_0.2s_ease-out]',
-            toast.type === 'success' ? 'bg-[#5D7052] text-[#F3F4F1]' : 'bg-[#A85448] text-white'
+            toast.type === 'success' ? 'bg-[#3478F6] text-[#FFFFFF]' : 'bg-[#A85448] text-white'
           )}
         >
           {toast.type === 'success'
@@ -837,34 +816,32 @@ ArticleItem({
   return (
     <div
       data-article-id={article.id}
+      data-selected={selected}
       onClick={onSelect}
-      className={cn(
-        'group relative px-3.5 py-3 rounded-xl cursor-pointer transition-all duration-200 overflow-hidden',
-        'border border-transparent',
-        selected
-          ? 'bg-[#5D7052]/10 border-[#5D7052]/30 shadow-[0_2px_12px_-2px_rgba(93,112,82,0.18)] ring-1 ring-[#5D7052]/15'
-          : [
-              'bg-[#FEFEFA] dark:bg-[#232320] border-[#DED8CF]/40 dark:border-[#3A3830]/60',
-              'lg:hover:shadow-[0_4px_16px_-4px_rgba(93,112,82,0.1)] lg:hover:border-[#DED8CF]/70 dark:lg:hover:border-[#3A3830]/80',
-              !suppressReadStyle && !article.isRead && 'border-l-2 border-l-[#5D7052]/50',
-            ],
-      )}
+      role="button"
+      tabIndex={0}
+      aria-label={article.title}
+      aria-pressed={selected}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(); }
+      }}
+      className="article-row page-content-gutter group relative py-[16px] cursor-pointer transition-colors duration-150 overflow-hidden"
     >
       {/* Unread dot */}
       {!suppressReadStyle && !article.isRead && !selected && (
-        <span className="absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-[#5D7052]" />
+        <span className="absolute top-[22px] right-5 w-1.5 h-1.5 rounded-full bg-[#3478F6]" />
       )}
 
       {/* Feed source + time */}
-      <div className="flex items-center gap-1.5 mb-1.5 pr-4">
+      <div className="flex items-center gap-1.5 mb-[6px] pr-3">
         <FeedIcon
           favicon={article.feed_favicon}
           url={article.url || ''}
           title={article.feed_title || ''}
-          className="w-3 h-3"
+          className="w-[14px] h-[14px]"
         />
-        <span className="text-[11px] text-[#78786C]/80 dark:text-[#8A8880] truncate font-medium">{article.feed_title}</span>
-        <span className="text-[11px] text-[#C8C4BB] dark:text-[#4A4840] ml-auto flex-shrink-0">
+        <span className="list-meta truncate">{article.feed_title}</span>
+        <span className="list-meta ml-auto flex-shrink-0">
           {relativeTime(article.publishedAt)}
         </span>
       </div>
@@ -872,10 +849,10 @@ ArticleItem({
       {/* Title */}
       <h3
         className={cn(
-          'article-card-title text-[15px] leading-snug mb-1 line-clamp-2',
+          'list-title mb-[6px] line-clamp-2',
           !suppressReadStyle && article.isRead
-            ? 'text-[#78786C] dark:text-[#5A5850] font-semibold'
-            : 'text-[#2C2C24] dark:text-[#E8E6DF] font-semibold'
+            ? '!text-[var(--color-muted-fg)]'
+            : 'text-[var(--color-fg)]'
         )}
       >
         {article.title}
@@ -883,31 +860,24 @@ ArticleItem({
 
       {/* Summary */}
       {article.summary && (
-        <p className="text-[12px] text-[#78786C]/70 dark:text-[#5A5850] line-clamp-2 leading-relaxed mt-0.5">
+        <p className="list-summary line-clamp-3">
           {article.summary}
         </p>
       )}
 
       {/* AI score + tags */}
       {(article.aiScore !== null || (article.aiTags && article.aiTags.length > 0)) && (
-        <div className="flex items-center flex-wrap gap-1 mt-1.5">
+        <div className="flex items-center gap-1.5 mt-[8px] overflow-hidden">
           {article.aiScore !== null && (
-            <span className={cn(
-              'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold',
-              article.aiScore >= 7
-                ? 'bg-[#5D7052]/12 text-[#5D7052]'
-                : article.aiScore >= 4
-                ? 'bg-[#C18C5D]/12 text-[#C18C5D]'
-                : 'bg-[#A85448]/12 text-[#A85448]'
-            )}>
+            <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-muted-fg)] flex-shrink-0">
               <Sparkles size={8} />
               {article.aiScore}
             </span>
           )}
-          {article.aiTags?.map((tag) => (
+          {article.aiTags?.slice(0, 3).map((tag) => (
             <span
               key={tag}
-              className="px-1.5 py-0.5 rounded-full bg-[#E6DCCD]/70 text-[#78786C] text-[10px] font-medium"
+              className="px-1.5 rounded bg-[var(--color-muted)] text-[var(--color-muted-fg)] text-[10px] leading-4 truncate max-w-[7rem]"
             >
               {tag}
             </span>

@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { cn } from '../lib/utils';
 import AddFeedModal from './AddFeedModal';
 import FeedIcon from './FeedIcon';
 import {
-  Rss, Star, Clock, Search, Settings, ChevronDown, ChevronRight,
-  Plus, RefreshCw, Trash2, Inbox, BookOpen, Newspaper,
-  CheckCircle, AlertCircle, X, EyeOff, Eye,
+  Star, Bookmark, Search, Settings, ChevronDown, ChevronRight,
+  Plus, RefreshCw, Trash2, Library, CircleDot, Newspaper,
+  CheckCircle, AlertCircle, X, EyeOff, Eye, MoreHorizontal,
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -22,7 +22,7 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'success' | 'error';
         'text-sm font-medium min-w-[240px] max-w-[320px]',
         'animate-[slideUp_0.2s_ease-out]',
         type === 'success'
-          ? 'bg-[#5D7052] text-[#F3F4F1]'
+          ? 'bg-[#3478F6] text-[#FFFFFF]'
           : 'bg-[#A85448] text-white'
       )}
     >
@@ -45,15 +45,15 @@ function ConfirmDialog({
     try { await onConfirm(); } finally { setLoading(false); }
   }
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#2C2C24]/40 dark:bg-[#000000]/60 backdrop-blur-sm">
-      <div className="bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/50 dark:border-[#3A3830]/60 rounded-[2rem] shadow-[0_24px_64px_-12px_rgba(44,44,36,0.2)] w-full max-w-sm p-8">
-        <h3 className="font-heading font-semibold text-lg text-[#2C2C24] dark:text-[#E8E6DF] mb-3">{title}</h3>
-        <p className="text-sm text-[#78786C] dark:text-[#8A8880] leading-relaxed mb-7">{message}</p>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#242424]/40 dark:bg-[#000000]/60 backdrop-blur-sm">
+      <div className="bg-[#FFFFFF] dark:bg-[#202124] border border-[#E8EBF0]/50 dark:border-[#33363D]/60 rounded-[2rem] shadow-[0_24px_64px_-12px_rgba(36,36,36,0.2)] w-full max-w-sm p-8">
+        <h3 className="font-heading font-semibold text-lg text-[#242424] dark:text-[#E5E7EB] mb-3">{title}</h3>
+        <p className="text-sm text-[#717784] dark:text-[#959CA8] leading-relaxed mb-7">{message}</p>
         <div className="flex items-center gap-3">
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 h-10 rounded-full border border-[#DED8CF] dark:border-[#3A3830] text-[#78786C] dark:text-[#8A8880] bg-transparent text-sm font-medium transition-all duration-200 hover:bg-[#F0EDE6] dark:hover:bg-[#2E2B25] active:scale-95 disabled:opacity-40"
+            className="flex-1 h-10 rounded-full border border-[#E8EBF0] dark:border-[#33363D] text-[#717784] dark:text-[#959CA8] bg-transparent text-sm font-medium transition-all duration-200 hover:bg-[#EAF2FF] dark:hover:bg-[#283449] active:scale-95 disabled:opacity-40"
           >
             取消
           </button>
@@ -74,6 +74,7 @@ function ConfirmDialog({
 export default function Sidebar() {
   const { feeds, groups, filter, setFilter, loadFeeds, deleteFeed, deleteGroup, updateFeed, setSidebarOpen } = useStore();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
@@ -99,6 +100,12 @@ export default function Sidebar() {
   function nav(f: Parameters<typeof setFilter>[0], path = '/') {
     setFilter(f);
     navigate(path);
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  }
+
+  function navPage(path: string) {
+    if (path === '/search') setFilter({ type: 'all' });
+    navigate(path, { replace: true });
     if (window.innerWidth < 1024) setSidebarOpen(false);
   }
 
@@ -165,40 +172,47 @@ export default function Sidebar() {
   const groupedFeeds = (groupId: string) => feeds.filter((f) => f.groupId === groupId);
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCF8] dark:bg-[#1C1C18]">
+    <div className="sidebar-surface flex flex-col h-full bg-[#F7F8FA] dark:bg-[#17181A]">
       {/* Header */}
-      <div className="px-4 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-[#5D7052] flex items-center justify-center shadow-[0_2px_8px_-1px_rgba(93,112,82,0.35)]">
-            <Rss size={13} className="text-[#F3F4F1]" />
-          </div>
-          <span className="font-heading font-bold text-base text-[#2C2C24] dark:text-[#E8E6DF] tracking-tight">
+      <div className="px-4 py-3.5" style={{ paddingTop: 'max(14px, env(safe-area-inset-top, 0px))' }}>
+        <div className="flex items-center gap-2">
+          <img src="/favicon.svg" alt="" className="brand-mark w-6 h-6" />
+          <span className="brand-wordmark text-[16px] leading-5 text-[#242424] dark:text-[#E5E7EB]">
             RSS Reader
           </span>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="toolbar-button ml-auto lg:hidden"
+            aria-label="关闭侧栏"
+            title="关闭侧栏"
+          >
+            <X size={18} />
+          </button>
         </div>
       </div>
 
-      <div className="mx-4 h-px bg-[#DED8CF]/60 dark:bg-[#3A3830]/60" />
+      <div className="sidebar-divider mx-4 h-px" />
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 px-2.5 space-y-0.5">
-        <NavItem icon={<Inbox size={14} />} label="全部文章" badge={totalUnread || undefined}
-          active={filter.type === 'all'} onClick={() => nav({ type: 'all' })} />
-        <NavItem icon={<BookOpen size={14} />} label="未读"
-          active={filter.type === 'unread'} onClick={() => nav({ type: 'unread' })} />
-        <NavItem icon={<Star size={14} />} label="已收藏"
-          active={filter.type === 'starred'} onClick={() => nav({ type: 'starred' })} />
-        <NavItem icon={<Clock size={14} />} label="稍后阅读"
-          active={filter.type === 'read-later'} onClick={() => nav({ type: 'read-later' })} />
+      <nav className="flex-1 min-h-0 overflow-y-auto py-2 px-2 space-y-1">
+        <NavItem icon={<Library size={18} />} label="全部文章" badge={totalUnread || undefined}
+          active={pathname === '/' && filter.type === 'all'} onClick={() => nav({ type: 'all' })} />
+        <NavItem icon={<CircleDot size={18} />} label="未读"
+          active={pathname === '/' && filter.type === 'unread'} onClick={() => nav({ type: 'unread' })} />
+        <NavItem icon={<Star size={18} />} label="已收藏"
+          active={pathname === '/' && filter.type === 'starred'} onClick={() => nav({ type: 'starred' })} />
+        <NavItem icon={<Bookmark size={18} />} label="稍后阅读"
+          active={pathname === '/' && filter.type === 'read-later'} onClick={() => nav({ type: 'read-later' })} />
 
-        <div className="pt-3 pb-1 px-2 flex items-center justify-between">
-          <span className="text-[10px] font-semibold text-[#78786C]/70 dark:text-[#5A5850] uppercase tracking-widest">订阅源</span>
+        <div className="pt-4 pb-1.5 px-2 flex items-center justify-between">
+          <span className="section-title text-[var(--color-fg-muted)]">订阅源</span>
           <button
             onClick={() => setShowAddFeed(true)}
-            className="w-5 h-5 rounded-full bg-[#E6DCCD] dark:bg-[#2E2B25] flex items-center justify-center text-[#5D7052] dark:text-[#7A9A6E] transition-all duration-200 hover:bg-[#5D7052] hover:text-[#F3F4F1] hover:scale-110 active:scale-95"
+            className="toolbar-button"
             title="添加订阅源"
+            aria-label="添加订阅源"
           >
-            <Plus size={11} />
+            <Plus size={16} />
           </button>
         </div>
 
@@ -210,32 +224,31 @@ export default function Sidebar() {
           return (
             <div key={group.id}>
               <div className={cn(
-                'group flex items-center gap-1 px-3 py-2 rounded-full text-[13px] font-medium transition-all duration-200 cursor-pointer',
-                filter.type === 'group' && filter.groupId === group.id
-                  ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_4px_12px_-2px_rgba(93,112,82,0.3)]'
-                  : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]'
+                'sidebar-row group',
+                pathname === '/' && filter.type === 'group' && filter.groupId === group.id && 'sidebar-selected'
               )}>
                 <button
-                  className="p-0.5 flex-shrink-0"
+                  className="p-0.5 shrink-0 rounded focus-visible:outline focus-visible:outline-2"
+                  aria-label={`${expanded ? '收起' : '展开'}分组「${group.name}」`}
+                  title={`${expanded ? '收起' : '展开'}分组`}
+                  aria-expanded={expanded}
                   onClick={(e) => { e.stopPropagation(); toggleGroup(group.id); }}
                 >
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </button>
-                <span className="flex-1 truncate" onClick={() => nav({ type: 'group', groupId: group.id })}>
-                  {group.name}
-                </span>
-                {gUnread > 0 && (
-                  <Badge count={gUnread} active={filter.type === 'group' && filter.groupId === group.id} />
-                )}
+                <button
+                  className="flex flex-1 min-w-0 items-center gap-2 text-left rounded focus-visible:outline focus-visible:outline-2"
+                  aria-current={pathname === '/' && filter.type === 'group' && filter.groupId === group.id ? 'page' : undefined}
+                  onClick={() => nav({ type: 'group', groupId: group.id })}
+                >
+                  <span className="flex-1 truncate">{group.name}</span>
+                  {gUnread > 0 && <Badge count={gUnread} />}
+                </button>
                 <button
                   onClick={(e) => handleDeleteGroup(group.id, group.name, e)}
-                  className={cn(
-                    'opacity-0 group-hover:opacity-100 p-1 rounded-full transition-all duration-150 flex-shrink-0',
-                    filter.type === 'group' && filter.groupId === group.id
-                      ? 'hover:bg-[#F3F4F1]/20 text-[#F3F4F1]/70'
-                      : 'hover:bg-[#A85448]/15 text-[#78786C] hover:text-[#A85448]'
-                  )}
+                  className="shrink-0 p-1 rounded lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 focus-visible:opacity-100 text-[var(--color-fg-muted)] hover:text-[#A85448] transition-opacity"
                   title="删除分组"
+                  aria-label={`删除分组「${group.name}」`}
                 >
                   <Trash2 size={11} />
                 </button>
@@ -247,7 +260,7 @@ export default function Sidebar() {
                     <FeedItem
                       key={feed.id}
                       feed={feed}
-                      active={filter.type === 'feed' && filter.feedId === feed.id}
+                      active={pathname === '/' && filter.type === 'feed' && filter.feedId === feed.id}
                       refreshing={refreshingId === feed.id}
                       onSelect={() => nav({ type: 'feed', feedId: feed.id })}
                       onRefresh={(e) => handleRefresh(feed.id, e)}
@@ -266,7 +279,7 @@ export default function Sidebar() {
           <FeedItem
             key={feed.id}
             feed={feed}
-            active={filter.type === 'feed' && filter.feedId === feed.id}
+            active={pathname === '/' && filter.type === 'feed' && filter.feedId === feed.id}
             refreshing={refreshingId === feed.id}
             onSelect={() => nav({ type: 'feed', feedId: feed.id })}
             onRefresh={(e) => handleRefresh(feed.id, e)}
@@ -276,28 +289,37 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="mx-4 h-px bg-[#DED8CF]/60 dark:bg-[#3A3830]/60" />
-      <div className="px-2.5 py-2 flex gap-1">
+      <div className="sidebar-divider mx-4 h-px" />
+      <div className="px-4 py-2 flex justify-between gap-2">
         <button
-          onClick={() => navigate('/digest', { replace: true })}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052]"
+          onClick={() => navPage('/digest')}
+          className="toolbar-button"
+          data-active={pathname === '/digest'}
+          title="日报"
+          aria-label="日报"
+          aria-current={pathname === '/digest' ? 'page' : undefined}
         >
-          <Newspaper size={13} />
-          <span className="font-medium">日报</span>
+          <Newspaper size={16} />
         </button>
         <button
-          onClick={() => { setFilter({ type: 'all' }); navigate('/search', { replace: true }); }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052]"
+          onClick={() => navPage('/search')}
+          className="toolbar-button"
+          data-active={pathname === '/search'}
+          title="搜索"
+          aria-label="搜索"
+          aria-current={pathname === '/search' ? 'page' : undefined}
         >
-          <Search size={13} />
-          <span className="font-medium">搜索</span>
+          <Search size={16} />
         </button>
         <button
-          onClick={() => navigate('/settings', { replace: true })}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-full text-xs text-[#78786C] transition-all duration-200 hover:bg-[#5D7052]/10 hover:text-[#5D7052]"
+          onClick={() => navPage('/settings')}
+          className="toolbar-button"
+          data-active={pathname === '/settings'}
+          title="设置"
+          aria-label="设置"
+          aria-current={pathname === '/settings' ? 'page' : undefined}
         >
-          <Settings size={13} />
-          <span className="font-medium">设置</span>
+          <Settings size={16} />
         </button>
       </div>
 
@@ -327,25 +349,20 @@ function NavItem({ icon, label, badge, active, onClick }: {
   icon: React.ReactNode; label: string; badge?: number; active: boolean; onClick: () => void;
 }) {
   return (
-    <button onClick={onClick} className={cn(
-      'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[13px] font-medium transition-all duration-200',
-      active
-        ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_4px_12px_-2px_rgba(93,112,82,0.3)]'
-        : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]'
+    <button onClick={onClick} aria-current={active ? 'page' : undefined} className={cn(
+      'sidebar-row w-full',
+      active && 'sidebar-selected'
     )}>
       {icon}
       <span className="flex-1 text-left">{label}</span>
-      {badge !== undefined && badge > 0 && <Badge count={badge} active={active} />}
+      {badge !== undefined && badge > 0 && <Badge count={badge} />}
     </button>
   );
 }
 
-function Badge({ count, active }: { count: number; active: boolean }) {
+function Badge({ count }: { count: number }) {
   return (
-    <span className={cn(
-      'text-[11px] font-bold px-2 py-0.5 rounded-full min-w-[1.3rem] text-center',
-      active ? 'bg-[#F3F4F1]/25 text-[#F3F4F1]' : 'bg-[#C18C5D]/15 text-[#C18C5D]'
-    )}>
+    <span className="list-meta shrink-0 min-w-[1.3rem] text-center tabular-nums font-normal">
       {count > 999 ? '999+' : count}
     </span>
   );
@@ -359,60 +376,106 @@ function FeedItem({ feed, active, refreshing, onSelect, onRefresh, onDelete, onT
   onDelete: (e: React.MouseEvent) => void;
   onToggleHidden: (e: React.MouseEvent) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAbove, setMenuAbove] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const row = rowRef.current;
+    const menu = menuRef.current;
+    const nav = row?.closest('nav');
+    if (row && menu && nav) {
+      setMenuAbove(row.getBoundingClientRect().bottom + menu.offsetHeight > nav.getBoundingClientRect().bottom);
+    }
+    menu?.querySelector('button')?.focus({ preventScroll: true });
+
+    function closeOutside(e: Event) {
+      if (e.target instanceof Node && !rowRef.current?.contains(e.target)) setMenuOpen(false);
+    }
+    function closeOnEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMenuOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    function closeOnScroll() { setMenuOpen(false); }
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('focusin', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('scroll', closeOnScroll, true);
+    window.addEventListener('resize', closeOnScroll);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('focusin', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('scroll', closeOnScroll, true);
+      window.removeEventListener('resize', closeOnScroll);
+    };
+  }, [menuOpen]);
+
   return (
     <div
-      className={cn(
-        'group flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-all duration-200',
-        active
-          ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_4px_12px_-2px_rgba(93,112,82,0.25)]'
-          : 'text-[#4A4A40] dark:text-[#B0ADA3] hover:bg-[#5D7052]/10 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]',
-        feed.isHidden && !active && 'opacity-40'
-      )}
-      onClick={onSelect}
+      ref={rowRef}
+      className={cn('sidebar-row relative', active && 'sidebar-selected', menuOpen && 'z-10')}
     >
-      <FeedIcon favicon={feed.favicon} siteUrl={feed.siteUrl} url={feed.url} title={feed.title} className="w-4 h-4" />
-      <span className="flex-1 truncate text-[13px] min-w-0">{feed.title}</span>
-
-      {/* 未读数：非活跃且无 hover 时显示（隐藏源不显示未读数） */}
-      {feed.unreadCount > 0 && !active && !feed.isHidden && (
-        <span className="text-[11px] font-bold text-[#C18C5D] flex-shrink-0 group-hover:hidden">
-          {feed.unreadCount}
-        </span>
+      <button
+        onClick={() => { setMenuOpen(false); onSelect(); }}
+        aria-current={active ? 'page' : undefined}
+        title={feed.title}
+        className={cn(
+          'flex flex-1 min-w-0 items-center gap-2 text-left rounded focus-visible:outline focus-visible:outline-2',
+          feed.isHidden && !active && 'opacity-40'
+        )}
+      >
+        <FeedIcon favicon={feed.favicon} siteUrl={feed.siteUrl} url={feed.url} title={feed.title} className="w-4 h-4 shrink-0" />
+        <span className="flex-1 min-w-0 truncate">{feed.title}</span>
+        {feed.unreadCount > 0 && !feed.isHidden && <Badge count={feed.unreadCount} />}
+      </button>
+      <button
+        ref={triggerRef}
+        onClick={() => setMenuOpen((open) => !open)}
+        className="shrink-0 flex items-center justify-center w-7 h-7 -my-1 rounded text-[var(--color-fg-muted)] hover:bg-[var(--color-muted)]"
+        title="订阅源操作"
+        aria-label={`订阅源「${feed.title}」的操作`}
+        aria-expanded={menuOpen}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {menuOpen && (
+        <div
+          ref={menuRef}
+          className="action-menu z-20"
+          style={menuAbove ? { top: 'auto', bottom: '100%' } : undefined}
+          role="group"
+          aria-label={`订阅源「${feed.title}」的操作`}
+        >
+          <button
+            onClick={(e) => { setMenuOpen(false); triggerRef.current?.focus(); onRefresh(e); }}
+            className="action-menu-item"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <span>刷新</span>
+          </button>
+          <button
+            onClick={(e) => { setMenuOpen(false); triggerRef.current?.focus(); onToggleHidden(e); }}
+            className="action-menu-item"
+          >
+            {feed.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+            <span>{feed.isHidden ? '取消隐藏' : '隐藏订阅源'}</span>
+          </button>
+          <button
+            onClick={(e) => { setMenuOpen(false); triggerRef.current?.focus(); onDelete(e); }}
+            className="action-menu-item"
+          >
+            <Trash2 size={14} />
+            <span>删除</span>
+          </button>
+        </div>
       )}
-
-      {/* Actions：hover 时显示 */}
-      <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-        <button
-          onClick={onRefresh}
-          className={cn(
-            'p-1 rounded-full transition-all duration-150',
-            active ? 'hover:bg-[#F3F4F1]/20 text-[#F3F4F1]/80' : 'hover:bg-[#5D7052]/15 text-[#78786C]'
-          )}
-          title="刷新"
-        >
-          <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
-        </button>
-        <button
-          onClick={onToggleHidden}
-          className={cn(
-            'p-1 rounded-full transition-all duration-150',
-            active ? 'hover:bg-[#F3F4F1]/20 text-[#F3F4F1]/80' : 'hover:bg-[#5D7052]/15 text-[#78786C] hover:text-[#5D7052]'
-          )}
-          title={feed.isHidden ? '取消隐藏' : '隐藏订阅源'}
-        >
-          {feed.isHidden ? <Eye size={11} /> : <EyeOff size={11} />}
-        </button>
-        <button
-          onClick={onDelete}
-          className={cn(
-            'p-1 rounded-full transition-all duration-150',
-            active ? 'hover:bg-[#F3F4F1]/20 text-[#F3F4F1]/80' : 'hover:bg-[#A85448]/15 text-[#78786C] hover:text-[#A85448]'
-          )}
-          title="删除"
-        >
-          <Trash2 size={11} />
-        </button>
-      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useStore } from '../store';
 import { api } from '../lib/api';
-import { X, Rss, Loader2, Plus } from 'lucide-react';
+import { X, Loader2, Plus } from 'lucide-react';
 
 export default function AddFeedModal({ onClose }: { onClose: () => void }) {
   const { addFeed, groups, loadGroups } = useStore();
@@ -64,19 +64,17 @@ export default function AddFeedModal({ onClose }: { onClose: () => void }) {
   }
 
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#2C2C24]/40 dark:bg-[#000000]/60 backdrop-blur-sm">
-      <div className="bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/50 dark:border-[#3A3830]/60 rounded-[2rem] shadow-[0_24px_64px_-12px_rgba(44,44,36,0.2)] w-full max-w-md">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#242424]/40 dark:bg-[#000000]/60 backdrop-blur-sm">
+      <div className="bg-[#FFFFFF] dark:bg-[#202124] border border-[#E8EBF0]/50 dark:border-[#33363D]/60 rounded-2xl shadow-[0_24px_64px_-12px_rgba(36,36,36,0.2)] w-full max-w-md">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#DED8CF]/40 dark:border-[#3A3830]/40">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[#E8EBF0]/40 dark:border-[#33363D]/40">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#5D7052] flex items-center justify-center shadow-[0_4px_12px_-2px_rgba(93,112,82,0.3)]">
-              <Rss size={16} className="text-[#F3F4F1]" />
-            </div>
-            <h2 className="font-heading font-semibold text-base text-[#2C2C24] dark:text-[#E8E6DF]">添加订阅源</h2>
+            <img src="/favicon.svg" alt="" className="brand-mark w-9 h-9" />
+            <h2 className="font-heading font-semibold text-base text-[#242424] dark:text-[#E5E7EB]">添加订阅源</h2>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#78786C] dark:text-[#8A8880] transition-all duration-200 hover:bg-[#E6DCCD] dark:hover:bg-[#2E2B25] hover:text-[#2C2C24] dark:hover:text-[#E8E6DF] active:scale-95"
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-[#717784] dark:text-[#959CA8] transition-all duration-200 hover:bg-[#EAF2FF] dark:hover:bg-[#283449] hover:text-[#242424] dark:hover:text-[#E5E7EB] active:scale-95"
           >
             <X size={16} />
           </button>
@@ -84,7 +82,7 @@ export default function AddFeedModal({ onClose }: { onClose: () => void }) {
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#78786C] dark:text-[#5A5850] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-[#717784] dark:text-[#959CA8] uppercase tracking-wider mb-2">
               RSS / Atom URL
             </label>
             <input
@@ -99,7 +97,7 @@ export default function AddFeedModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#78786C] dark:text-[#5A5850] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-[#717784] dark:text-[#959CA8] uppercase tracking-wider mb-2">
               分组（可选）
             </label>
             {isCreatingGroup ? (

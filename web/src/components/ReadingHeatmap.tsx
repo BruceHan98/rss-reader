@@ -12,11 +12,11 @@ function getLevel(count: number): 0 | 1 | 2 | 3 | 4 {
 }
 
 const LEVEL_CLASSES: Record<0 | 1 | 2 | 3 | 4, string> = {
-  0: 'bg-[#EDE8E0] dark:bg-[#2A2824] text-[#B8B3AB] dark:text-[#3E3C38]',
-  1: 'bg-[#B8CEAE] dark:bg-[#3A5535] text-[#5D7052] dark:text-[#A8C4A0]',
-  2: 'bg-[#8FB082] dark:bg-[#4A6B44] text-white',
-  3: 'bg-[#6B9461] dark:bg-[#5A7E54] text-white',
-  4: 'bg-[#4A7040] dark:bg-[#6B9461] text-white',
+  0: 'bg-[#EAF2FF] dark:bg-[#283449] text-[#717784] dark:text-[#959CA8]',
+  1: 'bg-[#C3D9FF] dark:bg-[#273B5A] text-[#2563D9] dark:text-[#C3D9FF]',
+  2: 'bg-[#B2CDFF] dark:bg-[#3C5D91] text-[#224A88] dark:text-[#E5E7EB]',
+  3: 'bg-[#5E91E8] dark:bg-[#5584D6] text-white',
+  4: 'bg-[#3478F6] dark:bg-[#3478F6] text-white',
 };
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -74,16 +74,16 @@ export default function ReadingHeatmap() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => setMonthOffset((o) => o - 1)}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C] hover:bg-[#5D7052]/10 hover:text-[#5D7052] transition-all active:scale-95"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[#717784] hover:bg-[#3478F6]/10 hover:text-[#3478F6] transition-all active:scale-95"
         >
           <ChevronLeft size={15} />
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#2C2C24]">
+          <span className="text-sm font-semibold text-[#242424]">
             {year}年 {MONTHS[month]}
           </span>
           {monthTotal > 0 && (
-            <span className="text-xs text-[#78786C] dark:text-[#8A8880] bg-[#E6DCCD]/60 dark:bg-[#2E2B25] px-2 py-0.5 rounded-full">
+            <span className="text-xs text-[#717784] dark:text-[#959CA8] bg-[#EAF2FF]/60 dark:bg-[#283449] px-2 py-0.5 rounded-full">
               共 {monthTotal} 篇
             </span>
           )}
@@ -91,20 +91,20 @@ export default function ReadingHeatmap() {
         <button
           onClick={() => setMonthOffset((o) => o + 1)}
           disabled={!canGoNext}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-[#78786C] hover:bg-[#5D7052]/10 hover:text-[#5D7052] transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[#717784] hover:bg-[#3478F6]/10 hover:text-[#3478F6] transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none"
         >
           <ChevronRight size={15} />
         </button>
       </div>
 
       {loading ? (
-        <div className="h-32 flex items-center justify-center text-[#78786C]/60 text-xs">加载中…</div>
+        <div className="h-32 flex items-center justify-center text-[#717784]/60 text-xs">加载中…</div>
       ) : (
         <div className="w-full">
           {/* Weekday headers */}
           <div className="grid grid-cols-7 mb-1">
             {WEEKDAYS.map((w) => (
-              <div key={w} className="text-center text-[10px] text-[#78786C]/60 font-medium py-0.5">
+              <div key={w} className="text-center text-[10px] text-[#717784]/60 font-medium py-0.5">
                 {w}
               </div>
             ))}
@@ -127,7 +127,7 @@ export default function ReadingHeatmap() {
                       className={[
                         'aspect-square rounded-md flex items-center justify-center text-[10px] font-semibold transition-all duration-150',
                         LEVEL_CLASSES[level],
-                        isToday ? 'ring-2 ring-[#5D7052] dark:ring-[#7A9A6E] ring-offset-1 dark:ring-offset-[#232320]' : '',
+                        isToday ? 'ring-2 ring-[#3478F6] dark:ring-[#82AEFF] ring-offset-1 dark:ring-offset-[#202124]' : '',
                       ].join(' ')}
                       title={count > 0 ? `${cell.dateStr}：阅读 ${count} 篇` : cell.dateStr}
                     >

@@ -113,10 +113,10 @@ export default function App() {
   }, [authState]);
 
   if (authState === 'checking') return (
-    <div className="min-h-screen bg-[#FDFCF8] dark:bg-[#1C1C18] flex items-center justify-center">
+    <div className="min-h-screen bg-[#F7F8FA] dark:bg-[#17181A] flex items-center justify-center">
       <div className="flex flex-col items-center gap-3 animate-pulse">
-        <div className="w-12 h-12 rounded-2xl bg-[#5D7052]/20" />
-        <div className="w-24 h-3 rounded-full bg-[#DED8CF]" />
+        <div className="w-12 h-12 rounded-2xl bg-[#3478F6]/20" />
+        <div className="w-24 h-3 rounded-full bg-[#E8EBF0]" />
       </div>
     </div>
   );
@@ -174,7 +174,7 @@ export default function App() {
          */}
         <div
           className={[
-            'relative h-full border-r border-[#DED8CF]/50 overflow-hidden flex-shrink-0',
+            'relative h-full border-r border-[#E8EBF0]/50 overflow-hidden flex-shrink-0',
             'w-full md:w-[var(--article-list-width)]',
             showListOnMobile ? 'flex flex-col' : 'hidden',
             isSpecialRoute ? 'md:hidden' : 'md:flex md:flex-col',
@@ -193,7 +193,7 @@ export default function App() {
             onPointerCancel={handleArticleListResizeEnd}
             className="hidden md:block absolute inset-y-0 -right-1.5 z-20 w-3 cursor-col-resize touch-none group"
           >
-            <div className="mx-auto h-full w-px bg-transparent group-hover:bg-[#5D7052]/50 group-active:bg-[#5D7052] transition-colors" />
+            <div className="mx-auto h-full w-px bg-transparent group-hover:bg-[#3478F6]/50 group-active:bg-[#3478F6] transition-colors" />
           </div>
         </div>
 

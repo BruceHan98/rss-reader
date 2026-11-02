@@ -43,6 +43,7 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
+    <div className="ios-pwa-top-surface" aria-hidden="true" />
     <RouterProvider router={router} />
   </React.StrictMode>
 );

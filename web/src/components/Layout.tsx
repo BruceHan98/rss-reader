@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import Sidebar from './Sidebar';
 import AiProgressFloat from './AiProgressFloat';
-import { ChevronLeft, ChevronRight, Inbox, BookOpen, Search, Settings2, Rss, Newspaper } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Library, CircleDot, Search, SlidersHorizontal, Newspaper } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -19,11 +19,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex overflow-hidden bg-[#FDFCF8] dark:bg-[#1C1C18]" style={{height: "100dvh"}}>
+    <div className="flex overflow-hidden bg-[#F7F8FA] dark:bg-[#17181A]" style={{height: "100dvh"}}>
       <AiProgressFloat />
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-20 bg-[#2C2C24]/30 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-[#242424]/30 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -32,14 +32,14 @@ export default function Layout({ children }: { children: ReactNode }) {
         className={`
           relative flex-shrink-0
           transition-all duration-300 ease-in-out
-          ${sidebarOpen ? 'lg:w-64' : 'lg:w-3'}
+          ${sidebarOpen ? 'lg:w-[256px]' : 'lg:w-3'}
         `}
       >
         <aside
           className={`
-            fixed lg:static inset-y-0 left-0 z-30
-            w-64 h-full flex flex-col
-            bg-[#FDFCF8] border-r border-[#DED8CF]/50
+            fixed lg:static inset-y-0 left-0 z-50 lg:z-30
+            sidebar-surface w-[256px] h-full flex flex-col
+            bg-[#F7F8FA] border-r border-[#E8EBF0]/50
             transform transition-all duration-300 ease-in-out
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-r-0 lg:overflow-hidden'}
           `}
@@ -51,61 +51,61 @@ export default function Layout({ children }: { children: ReactNode }) {
           onClick={() => setSidebarOpen(!sidebarOpen)}
         className="hidden lg:block absolute inset-y-0 right-0 z-40 w-3 cursor-col-resize group"
       >
-        <div className="absolute inset-y-0 right-0 w-0.5 bg-transparent group-hover:bg-[#5D7052]/35 dark:group-hover:bg-[#7A9A6E]/35 transition-colors duration-150" />
+        <div className="absolute inset-y-0 right-0 w-0.5 bg-transparent group-hover:bg-[#3478F6]/35 dark:group-hover:bg-[#82AEFF]/35 transition-colors duration-150" />
         <div className={`
             fixed top-1/2 -translate-y-1/2 z-50
             transition-all duration-300 ease-in-out
             ${sidebarOpen ? 'left-[256px]' : 'left-[2px]'}
             flex items-center gap-1.5 pointer-events-none
           `}>
-            <div className="w-3.5 h-6 rounded-r-full bg-[#DED8CF]/0 group-hover:bg-[#5D7052]/15 dark:group-hover:bg-[#7A9A6E]/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150">
-              {sidebarOpen ? <ChevronLeft size={9} className="text-[#5D7052] dark:text-[#7A9A6E]" /> : <ChevronRight size={9} className="text-[#5D7052] dark:text-[#7A9A6E]" />}
+            <div className="w-3.5 h-6 rounded-r-full bg-[#E8EBF0]/0 group-hover:bg-[#3478F6]/15 dark:group-hover:bg-[#82AEFF]/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150">
+              {sidebarOpen ? <ChevronLeft size={9} className="text-[#3478F6] dark:text-[#82AEFF]" /> : <ChevronRight size={9} className="text-[#3478F6] dark:text-[#82AEFF]" />}
             </div>
-            <div className="px-2 py-1 rounded-md bg-[#2C2C24]/82 dark:bg-[#E8E6DF]/10 text-[#F3F4F1] dark:text-[#B0ADA3] text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-150 select-none">
+            <div className="px-2 py-1 rounded-md bg-[#242424]/82 dark:bg-[#E5E7EB]/10 text-[#FFFFFF] dark:text-[#B1B6C0] text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all duration-150 select-none">
               {sidebarOpen ? 'collapse' : 'expand'}
             </div>
           </div>
         </div>
       </div>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#FDFCF8] dark:bg-[#1C1C18]">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F7F8FA] dark:bg-[#17181A]">
         <div className="flex-1 overflow-hidden">{children}</div>
 
         {/* Mobile bottom Tab navigation */}
         <nav
           className={cn(
-            "lg:hidden fixed bottom-0 left-0 right-0 border-t border-[#DED8CF]/50 dark:border-[#3A3830]/80 bg-[#FEFEFA]/95 dark:bg-[#1C1C18]/95 backdrop-blur-md z-40 transition-[transform,opacity] duration-300 ease-in-out",
+            "mobile-tab-bar lg:hidden fixed bottom-0 left-0 right-0 border-t border-[#E8EBF0]/50 dark:border-[#33363D]/80 bg-[#FFFFFF]/95 dark:bg-[#17181A]/95 z-40 transition-[transform,opacity] duration-300 ease-in-out",
             immersiveMode ? "translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
           )}
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         >
-          <div className="flex items-stretch h-14">
+          <div className="flex items-stretch h-16">
             <BottomTabItem
-              icon={<Inbox size={20} />}
-              label="全部"
+              icon={<Library size={20} />}
+              label="阅读"
               active={location.pathname === '/' && filter.type === 'all'}
               onClick={() => navTo('all', '/')}
             />
             <BottomTabItem
-              icon={<BookOpen size={20} />}
+              icon={<CircleDot size={20} />}
               label="未读"
               active={location.pathname === '/' && filter.type === 'unread'}
               onClick={() => navTo('unread', '/')}
             />
             <BottomTabItem
-              icon={<Newspaper size={18} />}
+              icon={<Newspaper size={20} />}
               label="日报"
               active={location.pathname === '/digest'}
               onClick={() => navigate('/digest')}
             />
             <BottomTabItem
-              icon={<Search size={18} />}
+              icon={<Search size={20} />}
               label="搜索"
               active={location.pathname === '/search'}
               onClick={() => navigate('/search')}
             />
             <BottomTabItem
-              icon={<Settings2 size={20} />}
+              icon={<SlidersHorizontal size={20} />}
               label="设置"
               active={location.pathname === '/settings'}
               onClick={() => navigate('/settings')}
@@ -129,24 +129,22 @@ function BottomTabItem({
   return (
     <button
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
       className={cn(
         'flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-200 active:scale-95 relative',
-        active ? 'text-[#2C2C24] dark:text-[#E8E6DF]' : 'text-[#A8A89C] dark:text-[#5A5850]'
+        active ? 'text-[#3478F6] dark:text-[#82AEFF]' : 'text-[#717784] dark:text-[#959CA8]'
       )}
     >
-      <span className="relative">
+      <span className="relative flex items-center justify-center w-11 h-7">
         {icon}
         {badge !== undefined && badge > 0 && (
-          <span className="absolute -top-1 -right-1.5 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[#C18C5D] text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+          <span className="absolute -top-1 -right-1.5 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--color-primary)] text-white text-[9px] font-bold flex items-center justify-center px-0.5">
             {badge > 999 ? '999+' : badge}
           </span>
         )}
       </span>
 
-      <span className={cn(
-        'text-[10px] transition-all duration-200',
-        active ? 'font-semibold' : 'font-medium'
-      )}>
+      <span className="text-[12px] leading-[18px] font-medium transition-colors duration-200">
         {label}
       </span>
     </button>

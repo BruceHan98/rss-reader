@@ -18,7 +18,7 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "types": ["vite-plugin-pwa/vanillajs"]
+    "types": ["vite/client", "vite-plugin-pwa/vanillajs"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

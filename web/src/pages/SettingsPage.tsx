@@ -102,13 +102,19 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
 
   if (!settings) return null;
 
-  const selectCls = 'h-9 px-3 rounded-xl border border-[#DED8CF]/80 dark:border-[#3A3830] bg-[#FDFCF8] dark:bg-[#232320] text-sm text-[#2C2C24] dark:text-[#E8E6DF] focus:outline-none focus:ring-2 focus:ring-[#5D7052]/30 focus:border-[#5D7052]/60 transition-all duration-150 cursor-pointer w-36';
-  const inputCls = 'h-9 px-3 rounded-xl border border-[#DED8CF]/80 dark:border-[#3A3830] bg-[#FDFCF8] dark:bg-[#232320] text-sm text-[#2C2C24] dark:text-[#E8E6DF] placeholder:text-[#C8C4BB] dark:placeholder:text-[#4A4840] focus:outline-none focus:ring-2 focus:ring-[#5D7052]/30 focus:border-[#5D7052]/60 transition-all duration-150 w-full';
+  const selectCls = 'settings-select';
+  const inputCls = 'settings-input';
 
   return (
-    <div className="flex flex-col h-full bg-[#F5F3EE] dark:bg-[#1C1C18] overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
+    <div className="flex flex-col h-full bg-[var(--color-bg-card)]">
       {/* Header */}
-      <div className="max-w-xl mx-auto w-full px-4 py-5 space-y-3">
+      <header className="page-header ios-pwa-top-bar">
+        <div className="page-header-row">
+          <h1 className="page-title">设置</h1>
+        </div>
+      </header>
+      <div className="flex-1 min-h-0 overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <div className="page-content-gutter max-w-3xl w-full py-[20px] space-y-[24px] page-text">
 
         {successMsg && (
           <Toast type="success" text={successMsg} />
@@ -124,7 +130,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
             </select>
           </Row>
           <Divider />
-          <Row label="字体大小">
+          <Row label="正文字号">
             <select value={settings.fontSize} onChange={(e) => handleSettingChange('fontSize', e.target.value)} className={selectCls}>
               <option value="14">小 14px</option>
               <option value="16">默认 16px</option>
@@ -133,12 +139,12 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
             </select>
           </Row>
           <Divider />
-          <Row label="行距">
+          <Row label="正文行距">
             <select value={settings.lineHeight} onChange={(e) => handleSettingChange('lineHeight', e.target.value)} className={selectCls}>
-              <option value="1.4">紧凑 1.4</option>
-              <option value="1.6">默认 1.6</option>
-              <option value="1.8">宽松 1.8</option>
-              <option value="2.0">很宽松 2.0</option>
+              <option value="1.4">紧凑</option>
+              <option value="1.6">标准</option>
+              <option value="1.8">宽松</option>
+              <option value="2.0">很宽松</option>
             </select>
           </Row>
           <Divider />
@@ -173,7 +179,7 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
               </select>
             </Row>
           ) : (
-            <div className="py-1">
+            <div className="py-4">
               <ScheduleTimePicker
                 value={settings.fetchScheduleTimes || ''}
                 onChange={(v) => handleSettingChange('fetchScheduleTimes', v)}
@@ -202,26 +208,26 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
 
         {/* ── 订阅源 ── */}
         <Section title="订阅源">
-          <div className="flex items-center gap-2.5 py-0.5">
+          <div className="grid grid-cols-2 gap-3 py-4">
             <button
               onClick={() => fileRef.current?.click()}
               disabled={importing}
-              className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl bg-[#5D7052] text-white hover:bg-[#4A5E42] dark:hover:bg-[#6A8A5E] transition-all duration-150 active:scale-95 disabled:opacity-60 font-medium"
+              className="settings-action"
             >
-              {importing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+              {importing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
               导入 OPML
             </button>
             <input ref={fileRef} type="file" accept=".opml,.xml" className="hidden" onChange={handleImport} />
             <button
               onClick={() => api.exportOpml()}
-              className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl border border-[#C8C4BB] dark:border-[#3A3830] text-[#78786C] dark:text-[#8A8880] hover:bg-[#EDEBE5] dark:hover:bg-[#2E2B25] transition-all duration-150 active:scale-95 font-medium"
+              className="settings-action"
             >
-              <Download size={12} />
+              <Download size={14} />
               导出 OPML
             </button>
           </div>
           {importResult && (
-            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#5D7052]/10 border border-[#5D7052]/20 text-xs text-[#5D7052] font-medium">
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#3478F6]/10 border border-[#3478F6]/20 list-meta text-[#3478F6] font-medium">
               <CheckCircle size={13} />
               导入完成：成功 <strong>{importResult.imported}</strong> 个，跳过重复 <strong>{importResult.skipped}</strong> 个
             </div>
@@ -230,41 +236,43 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
 
         {/* ── 阅读记录 ── */}
         <Section title="阅读记录">
-          <ReadingHeatmap />
+          <div className="py-4">
+            <ReadingHeatmap />
+          </div>
         </Section>
 
         {/* ── AI 分析 ── */}
         <Section title="AI 分析">
-          <Row label="API 地址">
+          <Row label="API 地址" field>
             <input
               type="text"
               value={aiBaseUrl}
               onChange={(e) => setAiBaseUrl(e.target.value)}
               onBlur={() => saveAiSetting('aiBaseUrl', aiBaseUrl)}
               placeholder="https://api.openai.com/v1"
-              className={cn(inputCls, 'max-w-[13rem]')}
+              className={inputCls}
             />
           </Row>
           <Divider />
-          <Row label="API 密钥">
+          <Row label="API 密钥" field>
             <input
               type="password"
               value={aiApiKey}
               onChange={(e) => setAiApiKey(e.target.value)}
               onBlur={() => saveAiSetting('aiApiKey', aiApiKey)}
               placeholder="sk-..."
-              className={cn(inputCls, 'max-w-[13rem]')}
+              className={inputCls}
             />
           </Row>
           <Divider />
-          <Row label="模型">
+          <Row label="模型" field>
             <input
               type="text"
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
               onBlur={() => saveAiSetting('aiModel', aiModel)}
               placeholder="gpt-4o-mini"
-              className={cn(inputCls, 'max-w-[13rem]')}
+              className={inputCls}
             />
           </Row>
           <Divider />
@@ -272,9 +280,9 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
             <button
               onClick={handleAiTest}
               disabled={aiTesting}
-              className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl border border-[#C8C4BB] dark:border-[#3A3830] text-[#78786C] dark:text-[#8A8880] hover:bg-[#EDEBE5] dark:hover:bg-[#2E2B25] transition-all duration-150 active:scale-95 disabled:opacity-50 font-medium"
+              className="settings-action"
             >
-              {aiTesting ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+              {aiTesting ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
               测试连通
             </button>
           </Row>
@@ -285,36 +293,36 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
         {/* ── 账户安全 ── */}
         <Section title="账户安全">
           <form onSubmit={handleChangePassword} className="space-y-0">
-            <Row label="当前密码">
+            <Row label="当前密码" field>
               <input
                 type="password"
                 value={pwdCurrent}
                 onChange={(e) => setPwdCurrent(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                className={cn(inputCls, 'max-w-[13rem]')}
+                className={inputCls}
               />
             </Row>
             <Divider />
-            <Row label="新密码">
+            <Row label="新密码" field>
               <input
                 type="password"
                 value={pwdNew}
                 onChange={(e) => setPwdNew(e.target.value)}
                 placeholder="至少 6 位"
                 autoComplete="new-password"
-                className={cn(inputCls, 'max-w-[13rem]')}
+                className={inputCls}
               />
             </Row>
             <Divider />
-            <Row label="确认新密码">
+            <Row label="确认新密码" field>
               <input
                 type="password"
                 value={pwdNew2}
                 onChange={(e) => setPwdNew2(e.target.value)}
                 placeholder="再次输入"
                 autoComplete="new-password"
-                className={cn(inputCls, 'max-w-[13rem]')}
+                className={inputCls}
               />
             </Row>
 
@@ -324,27 +332,28 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
               </div>
             )}
 
-            <div className="flex items-center justify-between pt-4">
+            <div className="grid grid-cols-2 gap-3 py-4">
               <button
                 type="submit"
                 disabled={pwdChanging}
-              className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl bg-[#5D7052] text-white hover:bg-[#4A5E42] dark:hover:bg-[#6A8A5E] transition-all duration-150 active:scale-95 disabled:opacity-50 font-medium"
-            >
-              {pwdChanging ? <Loader2 size={12} className="animate-spin" /> : <KeyRound size={12} />}
-              修改密码
+                className="settings-action settings-action-primary"
+              >
+                {pwdChanging ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                修改密码
               </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl border border-[#A85448]/50 dark:border-[#A85448]/30 text-[#A85448] hover:bg-[#A85448]/8 dark:hover:bg-[#A85448]/10 transition-all duration-150 active:scale-95 font-medium"
+                className="settings-action !text-[#A85448]"
               >
-                <LogOut size={12} />
+                <LogOut size={14} />
                 退出登录
               </button>
             </div>
           </form>
         </Section>
 
+        </div>
       </div>
     </div>
   );
@@ -354,29 +363,27 @@ export default function SettingsPage({ onLogout }: { onLogout?: () => void }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-[#FEFEFA] dark:bg-[#232320] border border-[#DED8CF]/60 dark:border-[#3A3830]/60 rounded-2xl overflow-hidden shadow-[0_1px_4px_-1px_rgba(44,44,36,0.06)]">
-      <div className="px-4 pt-3.5 pb-2">
-        <h2 className="text-xs font-semibold text-[#78786C] dark:text-[#5A5850] tracking-wide">{title}</h2>
-      </div>
-      <div className="px-4 pb-3 space-y-0">{children}</div>
-    </div>
+    <section className="settings-section">
+      <h2 className="settings-section-title">{title}</h2>
+      <div className="settings-section-body">{children}</div>
+    </section>
   );
 }
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Row({ label, hint, field, children }: { label: string; hint?: string; field?: boolean; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2 min-h-[2.5rem]">
-      <div className="flex-1 min-w-0">
-        <span className="text-sm text-[#2C2C24] dark:text-[#E8E6DF] font-medium">{label}</span>
-        {hint && <p className="text-[11px] text-[#78786C]/60 dark:text-[#5A5850] mt-0.5 leading-relaxed">{hint}</p>}
+    <div className={cn('settings-row', field && 'settings-row-field')}>
+      <div className="min-w-0">
+        <span className="page-text">{label}</span>
+        {hint && <p className="list-meta mt-1">{hint}</p>}
       </div>
-      <div className="flex-shrink-0">{children}</div>
+      <div className="settings-row-control">{children}</div>
     </div>
   );
 }
 
 function Divider() {
-  return <div className="border-t border-[#DED8CF]/40 dark:border-[#3A3830]/40 -mx-4 px-4" />;
+  return <div className="border-t border-[var(--color-border)]" />;
 }
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -387,7 +394,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       onClick={() => onChange(!checked)}
       className={cn(
         'relative inline-flex h-6 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none',
-        checked ? 'bg-[#5D7052]' : 'bg-[#C8C4BB]'
+        checked ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-border)]'
       )}
     >
       <span
@@ -403,9 +410,9 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 function Toast({ type, text }: { type: 'success' | 'error'; text: string }) {
   return (
     <div className={cn(
-      'flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-medium',
+      'flex items-center gap-2 px-3.5 py-2.5 rounded-xl list-meta font-medium',
       type === 'success'
-        ? 'bg-[#5D7052]/10 border border-[#5D7052]/20 text-[#5D7052]'
+        ? 'bg-[#3478F6]/10 border border-[#3478F6]/20 text-[#3478F6]'
         : 'bg-[#A85448]/10 border border-[#A85448]/20 text-[#A85448]'
     )}>
       {type === 'success' ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
@@ -432,10 +439,10 @@ function ScheduleTimePicker({ value, onChange }: { value: string; onChange: (v: 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
-        <Clock size={12} className="text-[#78786C]/70" />
-        <span className="text-sm text-[#2C2C24] dark:text-[#E8E6DF] font-medium">每天定时拉取</span>
+        <Clock size={12} className="text-[#717784]/70" />
+        <span className="page-text font-medium">每天定时拉取</span>
         {selected.size > 0 && (
-          <span className="ml-auto text-[11px] text-[#78786C]/60">已选 {selected.size} 个时间点</span>
+          <span className="ml-auto list-meta text-[#717784]/60">已选 {selected.size} 个时间点</span>
         )}
       </div>
       <div className="grid grid-cols-6 gap-1">
@@ -444,10 +451,10 @@ function ScheduleTimePicker({ value, onChange }: { value: string; onChange: (v: 
             key={h}
             onClick={() => toggle(h)}
             className={cn(
-              'h-7 rounded-lg text-[11px] font-medium transition-all duration-150 active:scale-95',
+              'h-7 rounded-lg list-meta font-medium transition-all duration-150 active:scale-95',
               selected.has(h)
-                ? 'bg-[#5D7052] text-[#F3F4F1] shadow-[0_2px_6px_-1px_rgba(93,112,82,0.35)]'
-                : 'bg-[#F0EDE6] dark:bg-[#2A2824] text-[#78786C] dark:text-[#8A8880] hover:bg-[#5D7052]/15 hover:text-[#5D7052] dark:hover:text-[#7A9A6E]'
+                ? 'bg-[#3478F6] text-[#FFFFFF] shadow-[0_2px_6px_-1px_rgba(52,120,246,0.35)]'
+                : 'bg-[#EAF2FF] dark:bg-[#283449] text-[#717784] dark:text-[#959CA8] hover:bg-[#3478F6]/15 hover:text-[#3478F6] dark:hover:text-[#82AEFF]'
             )}
           >
             {String(h).padStart(2, '0')}
@@ -455,7 +462,7 @@ function ScheduleTimePicker({ value, onChange }: { value: string; onChange: (v: 
         ))}
       </div>
       {selected.size === 0 && (
-        <p className="text-[11px] text-[#A85448]/80">请至少选择一个时间点</p>
+        <p className="list-meta text-[#A85448]/80">请至少选择一个时间点</p>
       )}
     </div>
   );

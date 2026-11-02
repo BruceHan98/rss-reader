@@ -196,6 +196,10 @@ function applyTheme(theme: string) {
       root.classList.remove('dark');
     }
   }
+  const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (themeColor) {
+    themeColor.content = root.classList.contains('dark') ? '#17181A' : '#F7F8FA';
+  }
 }
 
 function applyFontSettings(fontSize: string, lineHeight: string) {
