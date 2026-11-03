@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format, addDays, isToday } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -21,6 +21,7 @@ export default function DigestPage() {
   const [showCalendar, setShowCalendar] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollPositionRef = useRef(0);
+  const collapseAnchorRef = useRef<{ header: HTMLButtonElement; top: number } | null>(null);
 
   const { getEntry, getExpandedKeys, toggleExpandedKey, fetchDigest, generateDigest } = useDigestStore();
   const entry = getEntry(date);
@@ -38,6 +39,9 @@ export default function DigestPage() {
     const saved = Number(sessionStorage.getItem(`digest-scroll:${date}`));
     const position = Number.isFinite(saved) && saved > 0 ? saved : 0;
     scrollPositionRef.current = position;
+    container.style.paddingBottom = '0px';
+    // 恢复靠近页面底部的折叠位置时，保留足够的滚动空间。
+    container.style.paddingBottom = `${Math.max(0, position - (container.scrollHeight - container.clientHeight))}px`;
     container.scrollTo({ top: position, behavior: 'instant' });
 
     // 卡片展开状态和页面布局会在渲染后继续稳定，再校正一次防止位置偏移。
@@ -58,6 +62,29 @@ export default function DigestPage() {
       }
     };
   }, [date]);
+
+  // 取消吸顶和收起内容后，在绘制前保持分类标题原来的可视位置。
+  useLayoutEffect(() => {
+    const anchor = collapseAnchorRef.current;
+    collapseAnchorRef.current = null;
+    const container = scrollContainerRef.current;
+    if (!anchor || !container) return;
+    const position = container.scrollTop + anchor.header.getBoundingClientRect().top - anchor.top;
+    // 末尾分类折叠后可能无法再滚到原位置，仅补上锚定所需的最小底部空间。
+    const extraSpace = position - (container.scrollHeight - container.clientHeight);
+    if (extraSpace > 0) {
+      container.style.paddingBottom = `${parseFloat(container.style.paddingBottom || '0') + extraSpace}px`;
+    }
+    container.scrollTo({ top: position, behavior: 'instant' });
+    scrollPositionRef.current = container.scrollTop;
+  }, [expandedKeys]);
+
+  function toggleItem(key: string, header: HTMLButtonElement) {
+    if (expandedKeys.includes(key)) {
+      collapseAnchorRef.current = { header, top: header.getBoundingClientRect().top };
+    }
+    toggleExpandedKey(date, key);
+  }
 
   function saveScrollPosition() {
     const position = scrollContainerRef.current?.scrollTop ?? scrollPositionRef.current;
@@ -135,8 +162,16 @@ export default function DigestPage() {
       <div className="page-state-content">
       <div
         ref={scrollContainerRef}
-        onScroll={(event) => { scrollPositionRef.current = event.currentTarget.scrollTop; }}
+        onScroll={(event) => {
+          const container = event.currentTarget;
+          scrollPositionRef.current = container.scrollTop;
+          // 向上浏览后收回不再需要的底部空间，不改变当前滚动位置。
+          const padding = parseFloat(container.style.paddingBottom || '0');
+          const needed = Math.max(0, container.scrollTop - (container.scrollHeight - container.clientHeight - padding));
+          if (needed < padding) container.style.paddingBottom = `${needed}px`;
+        }}
         className="flex-1 min-h-0 overflow-y-auto"
+        style={{ overflowAnchor: 'none' }}
       >
         {entry.status === 'loading' && (
           <div className="page-empty-state">
@@ -227,7 +262,7 @@ export default function DigestPage() {
                   key={key}
                   item={item}
                   expanded={expandedKeys.includes(key)}
-                  onToggle={() => toggleExpandedKey(date, key)}
+                  onToggle={(header) => toggleItem(key, header)}
                   onOpenArticle={(id) => {
                     saveScrollPosition();
                     navigate(`/article/${id}`);
@@ -259,15 +294,15 @@ function DigestItemRow({
 }: {
   item: DigestItem;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (header: HTMLButtonElement) => void;
   onOpenArticle: (id: string) => void;
 }) {
   const multi = item.articles.length > 1;
   const sourceLabel = multi ? `${item.articles.length} 篇关联原文` : item.articles[0]?.feedTitle ?? '原文';
 
-  function handleClick() {
+  function handleClick(event: MouseEvent<HTMLButtonElement>) {
     if (multi) {
-      onToggle();
+      onToggle(event.currentTarget);
     } else if (item.articles[0]) {
       onOpenArticle(item.articles[0].id);
     }
@@ -308,8 +343,8 @@ function DigestItemRow({
       {multi && (
         <div
           className={cn(
-            'grid transition-[grid-template-rows,opacity] duration-300 ease-out',
-            expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            'grid',
+            expanded ? 'grid-rows-[1fr] opacity-100 transition-[grid-template-rows,opacity] duration-300 ease-out' : 'grid-rows-[0fr] opacity-0 transition-none'
           )}
           aria-hidden={!expanded}
         >

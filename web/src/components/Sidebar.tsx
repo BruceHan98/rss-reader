@@ -186,7 +186,7 @@ export default function Sidebar() {
       <div className="sidebar-divider hidden lg:block mx-4 h-px" />
 
       {/* Nav */}
-      <nav className="flex-1 min-h-0 overflow-y-auto py-2 px-2 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto pt-4 pb-2 lg:pt-2 px-2 space-y-1">
         <NavItem icon={<Library size={18} />} label="全部文章" badge={totalUnread || undefined}
           active={pathname === '/' && filter.type === 'all'} onClick={() => nav({ type: 'all' })} />
         <NavItem icon={<CircleDot size={18} />} label="未读"
