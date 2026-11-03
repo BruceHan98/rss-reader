@@ -8,7 +8,8 @@
     <!-- PWA Meta Tags -->
     <meta name="application-name" content="RSS Reader" />
     <meta name="description" content="自托管 RSS 阅读器" />
-    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#202124" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -18,17 +19,38 @@
       const theme = localStorage.getItem('rss-theme') || 'auto';
       const isDark = theme === 'dark' || (theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.classList.toggle('dark', isDark);
-      document.querySelector('meta[name="theme-color"]').content = isDark ? '#202124' : '#FFFFFF';
-      document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = isDark ? 'black-translucent' : 'default';
+      document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+      // iOS 状态栏样式保持 default，避免运行时切换独立模式的原生布局。
+      if (theme !== 'auto') {
+        document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+          meta.content = isDark ? '#202124' : '#FFFFFF';
+        });
+      }
     </script>
 
     <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
+    <style>
+      html, body { margin: 0; background: #F7F8FA; }
+      html.dark, html.dark body { background: #17181A; }
+      .startup-shell { min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
+      .startup-placeholder { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+      .startup-icon { width: 48px; height: 48px; border-radius: 16px; background: #3478F633; }
+      .startup-line { width: 96px; height: 12px; border-radius: 999px; background: #E8EBF0; }
+      html.dark .startup-line { background: #33363D; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="startup-shell" role="status" aria-label="正在加载 RSS Reader">
+        <div class="startup-placeholder" aria-hidden="true">
+          <div class="startup-icon"></div>
+          <div class="startup-line"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

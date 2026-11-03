@@ -197,21 +197,29 @@ function applyTheme(theme: string) {
     }
   }
   const isDark = root.classList.contains('dark');
-  const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (themeColor) {
-    themeColor.content = getComputedStyle(root).getPropertyValue('--color-bg-card').trim() || (isDark ? '#202124' : '#FFFFFF');
-  }
-  const statusBar = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
-  if (statusBar) statusBar.content = isDark ? 'black-translucent' : 'default';
+  root.style.colorScheme = isDark ? 'dark' : 'light';
+  const background = getComputedStyle(root).getPropertyValue('--color-bg-card').trim() || (isDark ? '#202124' : '#FFFFFF');
+  // auto 保留两组媒体主题色，系统可直接切换；手动主题让两组都使用选定颜色。
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((meta) => {
+    meta.content = theme === 'auto'
+      ? (meta.media.includes('dark') ? '#202124' : '#FFFFFF')
+      : background;
+  });
   localStorage.setItem('rss-theme', theme);
 }
 
-applyTheme(localStorage.getItem('rss-theme') || 'auto');
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  if ((useStore.getState().settings?.theme || localStorage.getItem('rss-theme') || 'auto') === 'auto') {
-    applyTheme('auto');
-  }
+function syncTheme() {
+  applyTheme(useStore.getState().settings?.theme || localStorage.getItem('rss-theme') || 'auto');
+}
+
+syncTheme();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+// iOS 挂起期间可能未触发媒体变化事件，恢复显示时按当前系统主题重新同步。
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') syncTheme();
 });
+window.addEventListener('pageshow', syncTheme);
+window.addEventListener('focus', syncTheme);
 
 function applyFontSettings(fontSize: string, lineHeight: string) {
   const root = document.documentElement;

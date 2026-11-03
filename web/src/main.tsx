@@ -12,30 +12,40 @@ if (isIosStandalone) {
   document.documentElement.classList.add('ios-pwa-standalone');
 }
 
-// 监听新 SW 激活后刷新页面（autoUpdate 模式：SW skipWaiting 后触发 controllerchange）
-// 必须在 registerSW 之前绑定，否则可能错过事件
-if ('serviceWorker' in navigator) {
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing) return;
-    refreshing = true;
-    window.location.reload();
-  });
-}
-
-// 注册 SW；onRegisteredSW 在 SW 注册成功后回调
-// 每次 app 从后台切回前台时主动检查更新，不依赖浏览器默认的 24h 检查周期
-registerSW({
-  immediate: true,
+// load 后再安装缓存，首屏资源优先；新 SW 等页面关闭后自然接管，不强制刷新。
+const updateSW = registerSW({
+  immediate: false,
+  onNeedRefresh() {
+    window.dispatchEvent(new Event('pwa-update-ready'));
+  },
   onRegisteredSW(_swUrl, reg) {
     if (!reg) return;
+    let lastUpdateCheck = Date.now();
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && Date.now() - lastUpdateCheck >= 60 * 60 * 1000) {
+        lastUpdateCheck = Date.now();
         reg.update().catch(() => {});
       }
     });
   },
 });
+
+// 显式更新入口：旧页面不会被打断，用户也无需杀掉 App 才能启用新版本。
+function PwaUpdateNotice() {
+  const [available, setAvailable] = React.useState(false);
+  React.useEffect(() => {
+    const onUpdate = () => setAvailable(true);
+    window.addEventListener('pwa-update-ready', onUpdate);
+    return () => window.removeEventListener('pwa-update-ready', onUpdate);
+  }, []);
+  if (!available) return null;
+  return (
+    <div role="status" className="fixed left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 whitespace-nowrap rounded-full bg-[#FFFFFF] dark:bg-[#202124] border border-[#E8EBF0] dark:border-[#33363D] px-4 py-2 text-sm text-[#242424] dark:text-[#E5E7EB] shadow-lg" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}>
+      <span>新版本已就绪</span>
+      <button className="font-semibold text-[#3478F6] dark:text-[#82AEFF]" onClick={() => void updateSW(true)}>更新</button>
+    </div>
+  );
+}
 
 const router = createBrowserRouter([
   { path: '*', element: <App /> },
@@ -45,5 +55,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <div className="ios-pwa-top-surface" aria-hidden="true" />
     <RouterProvider router={router} />
+    <PwaUpdateNotice />
   </React.StrictMode>
 );

@@ -1,7 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import DOMPurify from 'dompurify';
-import hljs from 'highlight.js';
-import mermaid from 'mermaid';
 import { api, type Article } from '../lib/api';
 import { useStore } from '../store';
 import { formatDate } from '../lib/utils';
@@ -343,6 +341,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
 
   useEffect(() => {
     if (!article) return;
+    let cancelled = false;
 
     // 渲染 mermaid 流程图
     // 匹配 <pre><code class="language-mermaid">...</code></pre> 或 <code class="mermaid">...</code>
@@ -357,32 +356,41 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     });
 
     if (mermaidBlocks.length > 0) {
-      const isDark = document.documentElement.classList.contains('dark');
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: isDark ? 'dark' : 'neutral',
-        securityLevel: 'loose',
-      });
+      void import('mermaid').then(({ default: mermaid }) => {
+        if (cancelled) return;
+        const isDark = document.documentElement.classList.contains('dark');
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: isDark ? 'dark' : 'neutral',
+          securityLevel: 'loose',
+        });
 
-      mermaidBlocks.forEach(async ({ container, code }, i) => {
-        try {
-          const id = `mermaid-${article.id}-${i}`;
-          const { svg } = await mermaid.render(id, code);
-          const wrapper = document.createElement('div');
-          wrapper.className = 'mermaid-wrap';
-          wrapper.innerHTML = svg;
-          container.replaceWith(wrapper);
-        } catch {
-          // 渲染失败保持原样
-        }
-      });
+        mermaidBlocks.forEach(async ({ container, code }, i) => {
+          try {
+            const id = `mermaid-${article.id}-${i}`;
+            const { svg } = await mermaid.render(id, code);
+            if (cancelled || !container.isConnected) return;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid-wrap';
+            wrapper.innerHTML = svg;
+            container.replaceWith(wrapper);
+          } catch {
+            // 渲染失败保持原样
+          }
+        });
+      }).catch(() => { /* 加载失败保持代码原样 */ });
     }
 
-    document.querySelectorAll('.article-body pre code').forEach((block) => {
-      // 跳过已处理的 mermaid 块
-      if (block.classList.contains('language-mermaid') || block.classList.contains('mermaid')) return;
-      hljs.highlightElement(block as HTMLElement);
-    });
+    const codeBlocks = Array.from(document.querySelectorAll<HTMLElement>('.article-body pre code'))
+      .filter((block) => !block.classList.contains('language-mermaid') && !block.classList.contains('mermaid'));
+    if (codeBlocks.length > 0) {
+      void import('highlight.js').then(({ default: hljs }) => {
+        if (cancelled) return;
+        codeBlocks.forEach((block) => {
+          if (block.isConnected) hljs.highlightElement(block);
+        });
+      }).catch(() => { /* 加载失败保持代码原样 */ });
+    }
     // 将表格包裹在可横向滚动的容器内，防止撑破页面宽度
     document.querySelectorAll('.article-body table').forEach((table) => {
       if (table.parentElement?.classList.contains('table-wrap')) return;
@@ -457,6 +465,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
       img.style.cursor = 'zoom-in';
       img.dataset.lightbox = 'true';
     });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article?.id]);
 
