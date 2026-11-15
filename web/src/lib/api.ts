@@ -103,6 +103,7 @@ export interface ArticleList {
   total: number;
   page: number;
   limit: number;
+  newCount?: number; // countNew=true 时返回：after 游标之后的新文章数量
 }
 
 export interface Settings {

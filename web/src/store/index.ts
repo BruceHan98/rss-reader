@@ -30,6 +30,9 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void;
   setImmersiveMode: (v: boolean) => void;
 
+  // 已保存的 filter 可能指向已删除的订阅源/分组，feeds 加载后校验并回退到「全部」
+  validateSavedFilter: () => void;
+
   refreshFeed: (feedId: string) => Promise<void>;
   deleteFeed: (feedId: string) => Promise<void>;
   addFeed: (url: string, title?: string, groupId?: string) => Promise<void>;
@@ -49,15 +52,18 @@ interface AppState {
 
 function loadFilterFromSession(): Filter {
   try {
-    const raw = sessionStorage.getItem('rss-filter');
-    if (raw) return JSON.parse(raw) as Filter;
+    const raw = localStorage.getItem('rss-filter');
+    if (raw) {
+      const parsed = JSON.parse(raw) as Filter;
+      if (parsed && typeof parsed === 'object' && typeof parsed.type === 'string') return parsed;
+    }
   } catch {}
   return { type: 'all' };
 }
 
 function saveFilterToSession(filter: Filter) {
   try {
-    sessionStorage.setItem('rss-filter', JSON.stringify(filter));
+    localStorage.setItem('rss-filter', JSON.stringify(filter));
   } catch {}
 }
 
@@ -74,6 +80,7 @@ export const useStore = create<AppState>((set, get) => ({
   loadFeeds: async () => {
     const feeds = await api.getFeeds();
     set({ feeds });
+    get().validateSavedFilter();
   },
 
   loadGroups: async () => {
@@ -89,6 +96,18 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setFilter: (filter) => { saveFilterToSession(filter); set({ filter, selectedArticleId: null }); },
+
+  validateSavedFilter: () => {
+    const { filter, feeds, groups } = get();
+    let invalid = false;
+    if (filter.type === 'feed' && filter.feedId && !feeds.some((f) => f.id === filter.feedId)) invalid = true;
+    if (filter.type === 'group' && filter.groupId && !groups.some((g) => g.id === filter.groupId)) invalid = true;
+    if (invalid) {
+      const f = { type: 'all' as const };
+      saveFilterToSession(f);
+      set({ filter: f });
+    }
+  },
   setSelectedArticle: (id) => set({ selectedArticleId: id }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),

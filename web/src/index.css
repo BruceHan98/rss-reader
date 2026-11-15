@@ -299,6 +299,15 @@
     .settings-select, .settings-input { font-size: 14px; }
     .settings-row-field { grid-template-columns: 120px minmax(0, 1fr); gap: 24px; padding: 12px 0; }
   }
+  .new-articles-pill {
+    background-color: #3478F6;
+    color: #FFFFFF;
+    box-shadow: 0 6px 20px -6px rgba(52, 120, 246, 0.5);
+    animation: newPillIn 0.25s ease-out;
+  }
+  .dark .new-articles-pill { background-color: var(--color-primary); color: var(--color-primary-fg); }
+  .new-articles-pill:hover { background-color: #2563D9; }
+  .dark .new-articles-pill:hover { background-color: #93BFFF; }
 }
 
 @layer utilities {
@@ -342,4 +351,9 @@
 @keyframes slideUp {
   from { opacity: 0; transform: translateX(-50%) translateY(12px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes newPillIn {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
 }

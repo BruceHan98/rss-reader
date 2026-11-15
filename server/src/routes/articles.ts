@@ -43,6 +43,9 @@ export async function articleRoutes(app: FastifyInstance) {
       tags?: string;
       before?: string; // 游标：加载此时间戳之前的文章，用于防止翻页时因已读状态变化导致的 OFFSET 偏移问题
       beforeId?: string; // 游标辅助：与 before 配合，处理相同时间戳的多篇文章（联合游标）
+      after?: string; // 游标：仅统计/加载此时间戳之后的新文章（不含 after 本身）
+      afterId?: string; // 游标辅助：与 after 配合，处理相同时间戳的文章（联合游标）
+      countNew?: string; // countNew=true 时不返回文章，仅统计 after 游标之后的新文章数量
     };
   }>('/api/articles', async (req) => {
     const page = Math.max(1, parseInt(req.query.page || '1') || 1);
@@ -88,6 +91,27 @@ export async function articleRoutes(app: FastifyInstance) {
         params.push(`%,${tag},%`);
       }
     }
+    // 新文章检查：基于 after 联合游标统计当前筛选条件下的新文章数量，不返回文章列表
+    if (req.query.countNew === 'true' && req.query.after) {
+      let newWhere = where;
+      const newParams = [...params];
+      if (req.query.afterId) {
+        newWhere += ' AND (a.effective_date, a.id) > (?, ?)';
+        newParams.push(req.query.after, req.query.afterId);
+      } else {
+        newWhere += ' AND a.effective_date > ?';
+        newParams.push(req.query.after);
+      }
+      const newCount = (
+        sqlite
+          .prepare(
+            `SELECT COUNT(*) as cnt FROM articles a JOIN feeds f ON f.id = a.feed_id WHERE ${newWhere}`
+          )
+          .get(...newParams) as any
+      ).cnt;
+      return { articles: [], total: 0, newCount, page: 1, limit: 0 };
+    }
+
     // total 统计不含游标条件，始终返回当前过滤条件下的全量文章数
     // 供前端展示文章总数，翻页是否结束由本次返回条数判断。
     const total = (
@@ -107,6 +131,17 @@ export async function articleRoutes(app: FastifyInstance) {
       } else {
         where += ' AND a.effective_date < ?';
         params.push(req.query.before);
+      }
+    }
+
+    // after 游标：拉取 anchor 之后的新文章（点击「N 篇新文章」悬浮条时使用）
+    if (req.query.after) {
+      if (req.query.afterId) {
+        where += ' AND (a.effective_date, a.id) > (?, ?)';
+        params.push(req.query.after, req.query.afterId);
+      } else {
+        where += ' AND a.effective_date > ?';
+        params.push(req.query.after);
       }
     }
 

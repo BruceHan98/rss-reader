@@ -3,10 +3,62 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, cacheArticle, type Article, type AiTag } from '../lib/api';
 import { cn, relativeTime } from '../lib/utils';
-import { CheckCheck, Loader2, BookOpen, RefreshCw, Sparkles, Tag, X, Star, Hash, PanelLeft, CheckCircle, AlertCircle, MoreHorizontal } from 'lucide-react';
+import { CheckCheck, Loader2, BookOpen, RefreshCw, Sparkles, Tag, X, Star, Hash, PanelLeft, CheckCircle, AlertCircle, MoreHorizontal, ArrowUp } from 'lucide-react';
 import FeedIcon from './FeedIcon';
 
 const PAGE_SIZE = 30;
+
+// ── 持久化辅助：筛选状态、滚动位置、新文章游标 均按 filterKey 隔离存入 localStorage ──
+
+interface SavedListState {
+  filter: FilterSaved;
+  scrollTops: Record<string, number>;
+  newAnchors: Record<string, { date: string; id: string } | null>;
+}
+
+interface FilterSaved {
+  type: 'all' | 'feed' | 'group' | 'starred' | 'read-later' | 'unread';
+  feedId?: string;
+  groupId?: string;
+  unreadOnly?: boolean; // feed/group 视图下的「只看未读」开关
+  minScore?: number;
+  tags?: string[];
+}
+
+const LIST_STATE_KEY = 'rss-list-state-v1';
+function loadListState(): SavedListState | null {
+  try {
+    const raw = localStorage.getItem(LIST_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        filter: parsed.filter ?? { type: 'all' },
+        scrollTops: parsed.scrollTops ?? {},
+        newAnchors: parsed.newAnchors ?? {},
+      };
+    }
+  } catch {}
+  return null;
+}
+
+function saveListState(state: Partial<SavedListState>) {
+  try {
+    const merged = { ...loadListState(), ...state } as SavedListState;
+    localStorage.setItem(LIST_STATE_KEY, JSON.stringify(merged));
+  } catch {}
+}
+
+function filterKeyOf(f: FilterSaved): string {
+  if (f.type === 'feed') return `feed:${f.feedId}${f.unreadOnly ? ':unread' : ''}`;
+  if (f.type === 'group') return `group:${f.groupId}${f.unreadOnly ? ':unread' : ''}`;
+  return f.type;
+}
+
+// 读取指定 filterKey 的滚动位置（兼容组件内 filter 类型）
+function savedScrollTopFor(f: { type: 'all' | 'feed' | 'group' | 'starred' | 'read-later' | 'unread'; feedId?: string; groupId?: string }, unreadOnly: boolean): number | null {
+  return loadListState()?.scrollTops?.[filterKeyOf({ ...f, unreadOnly } as FilterSaved)] ?? null;
+}
 
 
 export default function ArticleList() {
@@ -25,14 +77,17 @@ export default function ArticleList() {
   // 「滚动自动已读」是否开启
   const markReadOnScroll = settings?.markReadOnScroll === 'true';
 
-  // Unread-only filter (available for feed/group)
-  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  // Unread-only filter (available for feed/group)，从持久化状态恢复
+  const [showUnreadOnly, setShowUnreadOnly] = useState(() => {
+    return Boolean(loadListState()?.filter?.unreadOnly);
+  });
   const showUnreadOnlyRef = useRef(showUnreadOnly);
   useEffect(() => { showUnreadOnlyRef.current = showUnreadOnly; }, [showUnreadOnly]);
 
-  // AI filter state
-  const [minScore, setMinScore] = useState(0);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // AI filter state，从持久化状态恢复（与原行为一致：跨筛选器保持）
+  const savedFilterState = loadListState()?.filter;
+  const [minScore, setMinScore] = useState(savedFilterState?.minScore ?? 0);
+  const [selectedTags, setSelectedTags] = useState<string[]>(savedFilterState?.tags ?? []);
   const [allTags, setAllTags] = useState<AiTag[]>([]);
   const [showTagFilter, setShowTagFilter] = useState(false);
   const [showMarkReadMenu, setShowMarkReadMenu] = useState(false);
@@ -50,6 +105,35 @@ export default function ArticleList() {
   const [refreshing, setRefreshing] = useState(false);
   const [aiQuickTrigger, setAiQuickTrigger] = useState<'score' | 'tags' | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  // ── 新文章提示：基于「已看到位置」游标（anchor）统计当前筛选下的新文章数，点击后合并到列表顶部 ──
+  const [newCount, setNewCount] = useState(0);
+  // anchor 游标：用户已见过的最新文章位置，按 filterKey 持久化
+  const anchorRef = useRef<{ date: string; id: string } | null>(null);
+  // 防抖 timer
+  const newCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function persistAnchor() {
+    const state = loadListState();
+    const key = getFilterKey(filterRef.current, showUnreadOnlyRef.current);
+    const anchors = { ...(state?.newAnchors ?? {}) };
+    if (anchorRef.current) anchors[key] = anchorRef.current;
+    else delete anchors[key];
+    saveListState({ newAnchors: anchors });
+  }
+
+  function persistFilterState() {
+    const f = filterRef.current;
+    const saved: FilterSaved = {
+      type: f.type,
+      ...(f.type === 'feed' ? { feedId: f.feedId } : {}),
+      ...(f.type === 'group' ? { groupId: f.groupId } : {}),
+      ...(f.type === 'feed' || f.type === 'group' ? { unreadOnly: showUnreadOnlyRef.current } : {}),
+      minScore: minScoreRef.current,
+      tags: selectedTagsRef.current,
+    };
+    saveListState({ filter: saved });
+  }
 
   function showToast(msg: string, type: 'success' | 'error') {
     setToast({ msg, type });
@@ -227,9 +311,104 @@ export default function ArticleList() {
 
   // Keep a ref to loadArticles so the ai-job-done handler always calls the latest version
   // (avoids stale closure over `filter` state)
-  const loadArticlesRef = useRef<(p?: number, reset?: boolean, silent?: boolean) => Promise<void>>();
+  const loadArticlesRef = useRef<(p?: number, reset?: boolean, silent?: boolean, opts?: { advanceAnchor?: boolean; forceRefresh?: boolean }) => Promise<void>>();
 
-  async function loadArticles(p = 1, reset = false, silent = false) {
+  const [loadingNew, setLoadingNew] = useState(false);
+  const loadingNewRef = useRef(false);
+  useEffect(() => { loadingNewRef.current = loadingNew; }, [loadingNew]);
+
+  // ── 新文章检查：静默统计 anchor 游标之后的新文章数，展示悬浮提示 ──
+  // 注意：并发守卫由调用方（loadArticles 拦截分支 / scheduleNewCheck）负责
+  async function checkNewArticles() {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    try {
+      const params: Record<string, string | number | undefined> = { countNew: 'true', after: anchor.date, afterId: anchor.id };
+      const f = filterRef.current;
+      if (f.type === 'feed') params.feedId = f.feedId;
+      if (f.type === 'group') params.groupId = f.groupId;
+      if (f.type === 'unread') params.isRead = 'false';
+      if ((f.type === 'feed' || f.type === 'group') && showUnreadOnlyRef.current) params.isRead = 'false';
+      if (f.type === 'starred') params.isStarred = 'true';
+      if (f.type === 'read-later') params.isReadLater = 'true';
+      if (minScoreRef.current > 0) params.minScore = minScoreRef.current;
+      if (selectedTagsRef.current.length > 0) params.tags = selectedTagsRef.current.join(',');
+      const data = await api.getArticles(params);
+      setNewCount(data.newCount ?? 0);
+    } catch { /* ignore */ }
+  }
+
+  function scheduleNewCheck(delay = 3000) {
+    if (newCheckTimerRef.current) clearTimeout(newCheckTimerRef.current);
+    newCheckTimerRef.current = setTimeout(() => {
+      newCheckTimerRef.current = null;
+      if (!isFetchingRef.current && !loadingNewRef.current) void checkNewArticles();
+    }, delay);
+  }
+
+  // 点击悬浮条：拉取 anchor 之后的新文章，合并到列表顶部（Twitter 风格）
+  async function handleLoadNew() {
+    const anchor = anchorRef.current;
+    if (!anchor || loadingNew) return;
+    setLoadingNew(true);
+    try {
+      const params: Record<string, string | number | undefined> = { page: 1, limit: 100, after: anchor.date, afterId: anchor.id };
+      const f = filterRef.current;
+      if (f.type === 'feed') params.feedId = f.feedId;
+      if (f.type === 'group') params.groupId = f.groupId;
+      if (f.type === 'unread') params.isRead = 'false';
+      if ((f.type === 'feed' || f.type === 'group') && showUnreadOnlyRef.current) params.isRead = 'false';
+      if (f.type === 'starred') params.isStarred = 'true';
+      if (f.type === 'read-later') params.isReadLater = 'true';
+      if (minScoreRef.current > 0) params.minScore = minScoreRef.current;
+      if (selectedTagsRef.current.length > 0) params.tags = selectedTagsRef.current.join(',');
+      const data = await api.getArticles(params);
+      const fresh = data.articles;
+      if (fresh.length > 0) {
+        setArticles((prev) => {
+          const existing = new Set(prev.map((a) => a.id));
+          const merged = [...fresh.filter((a) => !existing.has(a.id)), ...prev];
+          if (merged.length > 0) {
+            const top = merged[0];
+            const topDate = top.effectiveDate ?? top.publishedAt;
+            if (topDate) anchorRef.current = { date: topDate, id: top.id };
+          }
+          return merged;
+        });
+        persistAnchor();
+        // 同步计数（total 不含游标条件，为当前筛选的全量数）
+        setTotal(data.total);
+        setDisplayTotal(data.total);
+        const fk = getFilterKey(filterRef.current, showUnreadOnlyRef.current);
+        const isDynamic = filterRef.current.type === 'unread' || filterRef.current.type === 'starred' || filterRef.current.type === 'read-later';
+        if (!isDynamic) displayTotalCacheRef.current.set(fk, data.total);
+      }
+      setNewCount(0);
+      // 合并后回到顶部展示新文章（Twitter 风格）
+      scrollContainerRef.current?.scrollTo({ top: 0 });
+      const key = getFilterKey(filterRef.current, showUnreadOnlyRef.current);
+      const cache = articleListCacheRef.current.get(key);
+      if (cache) {
+        const existingIds = new Set(cache.map((a) => a.id));
+        articleListCacheRef.current.set(key, [...fresh.filter((a) => !existingIds.has(a.id)), ...cache]);
+      }
+    } catch { /* ignore */ } finally {
+      setLoadingNew(false);
+    }
+  }
+
+  async function loadArticles(p = 1, reset = false, silent = false, opts?: { advanceAnchor?: boolean; forceRefresh?: boolean }) {
+    // 静默刷新且已有 anchor：不重置列表，改为静默检查新文章数（保持阅读位置不跳动）
+    // forceRefresh=true（列表在顶部）或 advanceAnchor=false（重启恢复）时仍执行真实刷新
+    if (reset && silent && anchorRef.current && opts?.forceRefresh !== true && opts?.advanceAnchor !== false) {
+      isFetchingRef.current = true;
+      try {
+        await checkNewArticles();
+      } finally {
+        isFetchingRef.current = false;
+      }
+      return;
+    }
     // 取消上一个未完成的请求，防止旧响应覆盖新数据（竞态条件）
     if (reset) {
       abortControllerRef.current?.abort();
@@ -283,6 +462,23 @@ export default function ArticleList() {
       } else if (reset) {
         cursorRef.current = null;
       }
+      // reset 时同步更新 anchor（「已看到位置」）：列表最新一篇文章即新文章统计的起点
+      // advanceAnchor=false 时保留已有 anchor（如重启恢复：新文章需计入提示而非静默吸收）并触发新文章检查；
+      // 无 anchor 时（首次使用）仍需建立，否则新文章检测无从比较
+      if (reset && data.articles.length > 0) {
+        const firstArticle = data.articles[0];
+        const firstDate = firstArticle?.effectiveDate ?? firstArticle?.publishedAt ?? null;
+        if (firstDate && (opts?.advanceAnchor !== false || !anchorRef.current)) {
+          const changed = !anchorRef.current || anchorRef.current.id !== firstArticle.id;
+          anchorRef.current = { date: firstDate, id: firstArticle.id };
+          persistAnchor();
+          // anchor 前进意味着之前提示的新文章已被看到/吸收，清零悬浮条
+          if (changed) setNewCount(0);
+        } else if (opts?.advanceAnchor === false) {
+          // 保留旧 anchor：检查重启期间新增的文章并提示
+          scheduleNewCheck(1500);
+        }
+      }
       setArticles((prev) => (reset ? data.articles : [...prev, ...data.articles]));
       // hasMore 判断：本次返回文章数等于 limit，说明后面可能还有更多
       // 不使用「累积数量 < total」，因为 total 随用户阅读行为实时减少，会导致提前停止加载
@@ -300,6 +496,23 @@ export default function ArticleList() {
   }
   // Always keep the ref pointing at the latest loadArticles (captures current filter/minScore/tags)
   loadArticlesRef.current = loadArticles;
+
+  // 滚动位置记忆：按 filterKey 保存，切换筛选/重新挂载时恢复
+  function persistScroll() {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const state = loadListState();
+    const key = getFilterKey(filterRef.current, showUnreadOnlyRef.current);
+    const tops = { ...(state?.scrollTops ?? {}) };
+    // 滚动在顶部时清除记录，下次从最新开始
+    if (el.scrollTop <= 2) delete tops[key];
+    else tops[key] = el.scrollTop;
+    saveListState({ scrollTops: tops });
+  }
+
+  // 重启（首次挂载）：从持久化状态恢复 anchor，并延迟恢复滚动位置
+  const isInitialMountRef = useRef(true);
+  const pendingScrollRestoreRef = useRef<number | null>(null);
 
   // Reset showUnreadOnly when switching to a filter that doesn't support it
   useEffect(() => {
@@ -319,8 +532,29 @@ export default function ArticleList() {
     setDisplayTotal(cachedTotal);
     setHasMore(false);
     setPage(1);
+    setNewCount(0);
     scrollReadPendingIds.current.clear(); // 清除旧 tab 的已读记录，防止 id 污染新 tab
-    scrollContainerRef.current?.scrollTo({ top: 0 });
+
+    // 从持久化状态恢复该 filterKey 的 anchor（新文章游标）
+    const savedAnchor = loadListState()?.newAnchors?.[getFilterKey(filter, showUnreadOnlyRef.current)] ?? null;
+    anchorRef.current = savedAnchor;
+
+    const wasInitialMount = isInitialMountRef.current;
+    if (wasInitialMount) {
+      isInitialMountRef.current = false;
+      // 重启恢复：不回顶，待首屏文章加载后恢复到上次阅读位置
+      pendingScrollRestoreRef.current = savedScrollTopFor(filter, showUnreadOnlyRef.current);
+      scrollContainerRef.current?.scrollTo({ top: 0 });
+    } else {
+      // 切换筛选：取消未完成的滚动恢复，回顶
+      pendingScrollRestoreRef.current = null;
+      scrollContainerRef.current?.scrollTo({ top: 0 });
+    }
+
+    persistFilterState();
+
+    // 重启首装：保留已保存的 anchor，使停用期间新增的文章以悬浮条提示而非静默吸收
+    const initialOpts = wasInitialMount && anchorRef.current ? { advanceAnchor: false } : undefined;
 
     // 未读/收藏/稍后阅读等动态列表不使用缓存（内容随时变化，缓存会导致数字和实际不一致）
     const isDynamicFilter = filter.type === 'unread' || filter.type === 'starred' || filter.type === 'read-later';
@@ -328,11 +562,11 @@ export default function ArticleList() {
       // 命中缓存（仅 feed/group/all 类型）：立即展示旧数据，后台静默刷新
       setArticles(cachedArticles);
       setHasMore(cachedTotal > cachedArticles.length);
-      loadArticles(1, true, true);
+      loadArticles(1, true, true, initialOpts);
     } else {
       // 动态列表或无缓存：始终重新加载，确保数据准确
       setArticles([]);
-      loadArticles(1, true);
+      loadArticles(1, true, false, initialOpts);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
@@ -348,6 +582,10 @@ export default function ArticleList() {
     setDisplayTotal(0);
     setHasMore(false);
     setPage(1);
+    setNewCount(0);
+    // 切换未读筛选后恢复对应 filterKey 的 anchor，并持久化筛选状态
+    anchorRef.current = loadListState()?.newAnchors?.[getFilterKey(filterRef.current, showUnreadOnly)] ?? null;
+    persistFilterState();
     // 切换未读筛选后，重新加载
     loadArticles(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -366,6 +604,7 @@ export default function ArticleList() {
     setPage(1);
     // AI 筛选条件变化后，缓存的第一页结果已失效，清除
     articleListCacheRef.current.delete(getFilterKey(filterRef.current));
+    persistFilterState();
     loadArticles(1, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minScore, selectedTags]);
@@ -379,6 +618,88 @@ export default function ArticleList() {
     }
     window.addEventListener('ai-job-done', onAiDone);
     return () => window.removeEventListener('ai-job-done', onAiDone);
+  }, []);
+
+  // ── 滚动：节流保存位置；文章列表变化后执行待恢复的滚动位置 ──
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    function onScroll() {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        persistScroll();
+      }, 500);
+    }
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      if (timer) clearTimeout(timer);
+      container.removeEventListener('scroll', onScroll);
+      // 卸载前保存最终位置（如跳转文章详情页）
+      persistScroll();
+    };
+  }, []);
+
+  // 首屏文章就绪后恢复上次阅读位置（仅重启恢复场景）；内容不足时继续加载下一页直至足够
+  useEffect(() => {
+    const pending = pendingScrollRestoreRef.current;
+    if (pending == null || articles.length === 0) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.clientHeight > pending) {
+      pendingScrollRestoreRef.current = null;
+      el.scrollTop = pending;
+    } else if (hasMore) {
+      tryLoadMore();
+    }
+  }, [articles, hasMore]);
+
+  // 页面卸载前保存滚动位置（刷新/关闭 app；iOS 上 pagehide 比 beforeunload 可靠）
+  useEffect(() => {
+    function onSave() {
+      persistScroll();
+    }
+    window.addEventListener('beforeunload', onSave);
+    window.addEventListener('pagehide', onSave);
+    return () => {
+      window.removeEventListener('beforeunload', onSave);
+      window.removeEventListener('pagehide', onSave);
+    };
+  }, []);
+
+  // ── 新文章检查时机：切回页面/回前台时 + 定时轮询（仅列表处于顶部时主动吸收新文章）──
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'visible') {
+        const el = scrollContainerRef.current;
+        // 位于顶部时：强制静默刷新列表（新文章直接出现在顶部）；否则仅统计新文章数显示悬浮条
+        if (el && el.scrollTop <= 2) {
+          loadArticlesRef.current?.(1, true, true, { forceRefresh: true });
+        } else {
+          scheduleNewCheck(800);
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 定时轮询新文章（30s），仅在页面可见时执行
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (isFetchingRef.current || loadingNewRef.current) return;
+      const el = scrollContainerRef.current;
+      if (el && el.scrollTop <= 2) {
+        loadArticlesRef.current?.(1, true, true, { forceRefresh: true });
+      } else {
+        scheduleNewCheck(0);
+      }
+    }, 30000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 滚动自动已读：监听滚动容器的 scroll 事件，检查哪些文章已滚出顶部
@@ -495,6 +816,7 @@ export default function ArticleList() {
         await loadFeeds();
         showToast(res.newArticles > 0 ? `获取到 ${res.newArticles} 篇新文章` : '暂无新文章', 'success');
       }
+      setNewCount(0);
       await loadArticles(1, true);
     } catch {
       showToast('刷新失败，请检查网络', 'error');
@@ -765,6 +1087,23 @@ export default function ArticleList() {
           </div>
         ) : (
           <>
+            {/* 新文章悬浮提示（Twitter 风格）：点击拉取当前筛选下的新文章 */}
+            {newCount > 0 && (
+              <div className="sticky top-0 z-30 px-4 -mb-[1px] pointer-events-none">
+                <button
+                  onClick={handleLoadNew}
+                  disabled={loadingNew}
+                  className="new-articles-pill pointer-events-auto mx-auto flex items-center gap-2 px-4 h-9 rounded-full text-xs font-semibold"
+                >
+                  {loadingNew ? (
+                    <Loader2 size={13} className="animate-spin shrink-0" />
+                  ) : (
+                    <ArrowUp size={13} className="shrink-0" />
+                  )}
+                  {newCount} 篇新文章
+                </button>
+              </div>
+            )}
             <div className="pb-[calc(var(--mobile-tab-height)+1rem+env(safe-area-inset-bottom,0px))] lg:pb-4">
               {articles.map((article) => (
                 <ArticleItem
