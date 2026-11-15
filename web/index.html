@@ -12,7 +12,9 @@
     <meta name="theme-color" content="#202124" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- 静态声明 black-translucent：页面延伸至状态栏下方，状态栏背景由 theme-color 决定，
+         文字颜色由系统按亮度自动适配（Safari 15.4+），从而跟随应用主题切换。 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="RSS Reader" />
     <meta name="format-detection" content="telephone=no" />
     <script>
@@ -20,7 +22,12 @@
       const isDark = theme === 'dark' || (theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.classList.toggle('dark', isDark);
       document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-      // iOS 状态栏样式保持 default，避免运行时切换独立模式的原生布局。
+      // black-translucent 状态栏下页面首帧即延伸到屏幕顶部，需在渲染前识别独立模式，
+      // 供 safe-area 样式（.ios-pwa-standalone）避免内容被状态栏遮挡或布局闪跳。
+      if (window.navigator.standalone === true) {
+        document.documentElement.classList.add('ios-pwa-standalone');
+      }
+      // auto 保留两组媒体主题色，系统可直接切换；手动主题让两组都使用选定颜色。
       if (theme !== 'auto') {
         document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
           meta.content = isDark ? '#202124' : '#FFFFFF';
