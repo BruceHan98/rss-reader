@@ -5,7 +5,8 @@
 @layer base {
   :root {
     --mobile-toolbar-height: 53px;
-    --mobile-tab-height: var(--mobile-toolbar-height);
+    /* 底部 Tab 栏比顶部工具栏更紧凑，减少上下留白 */
+    --mobile-tab-height: 48px;
     --font-size: 16px;
     --line-height: 1.6;
     --font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
@@ -193,7 +194,8 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    margin-bottom: calc(var(--mobile-tab-height) + env(safe-area-inset-bottom, 0px));
+    /* 底部安全区只预留 Tab 栏实际占用的半量（见 Layout.tsx paddingBottom），避免内容底部多出空隙 */
+    margin-bottom: calc(var(--mobile-tab-height) + env(safe-area-inset-bottom, 0px) * 0.5);
   }
   @media (min-width: 1024px) {
     .page-state-content { margin-bottom: 0; }

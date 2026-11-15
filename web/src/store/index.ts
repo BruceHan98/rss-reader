@@ -67,6 +67,10 @@ function saveFilterToSession(filter: Filter) {
   } catch {}
 }
 
+// groups 是否已完成首次加载：validateSavedFilter 依赖它避免竞态误判
+// （loadFeeds 与 loadGroups 并行，若 groups 尚未返回，分组筛选会被误判无效重置为全部）
+let groupsLoadedOnce = false;
+
 export const useStore = create<AppState>((set, get) => ({
   feeds: [],
   groups: [],
@@ -85,7 +89,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   loadGroups: async () => {
     const groups = await api.getGroups();
+    groupsLoadedOnce = true;
     set({ groups });
+    // groups 首次加载后再校验一次，避免 feeds 先到时把有效分组筛选误判为无效
+    get().validateSavedFilter();
   },
 
   loadSettings: async () => {
@@ -101,7 +108,8 @@ export const useStore = create<AppState>((set, get) => ({
     const { filter, feeds, groups } = get();
     let invalid = false;
     if (filter.type === 'feed' && filter.feedId && !feeds.some((f) => f.id === filter.feedId)) invalid = true;
-    if (filter.type === 'group' && filter.groupId && !groups.some((g) => g.id === filter.groupId)) invalid = true;
+    // groups 未加载完成时不判分组无效，等 loadGroups 后的二次校验处理
+    if (filter.type === 'group' && filter.groupId && groupsLoadedOnce && !groups.some((g) => g.id === filter.groupId)) invalid = true;
     if (invalid) {
       const f = { type: 'all' as const };
       saveFilterToSession(f);

@@ -305,6 +305,9 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     lastScrollY.current = 0;
 
     return () => {
+      // 切换/卸载时立即落盘当前位置（防抖定时器可能在卸载后不会触发）；
+      // 防抖回调持有旧 articleId 引用会写错 key，这里以闭包变量为准。
+      if (saveScrollTimer.current) clearTimeout(saveScrollTimer.current);
       const pos = container?.scrollTop ?? 0;
       if (pos > 0) {
         localStorage.setItem(`read-pos:${articleId}`, String(pos));
@@ -312,6 +315,30 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         localStorage.removeItem(`read-pos:${articleId}`);
       }
     };
+  }, [articleId]);
+
+  // 退出/切后台时立即落盘，避免进程被杀后丢失防抖中的末次位置
+  useEffect(() => {
+    const flush = () => {
+      const el = scrollRef.current;
+      if (!el) return;
+      if (saveScrollTimer.current) clearTimeout(saveScrollTimer.current);
+      if (el.scrollTop > 0) {
+        localStorage.setItem(`read-pos:${articleId}`, String(el.scrollTop));
+      } else {
+        localStorage.removeItem(`read-pos:${articleId}`);
+      }
+    };
+    const flushOnHidden = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flushOnHidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flushOnHidden);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId]);
 
   useEffect(() => {
@@ -324,18 +351,56 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   }, [articleId]);
 
   // 文章加载完成后，恢复当前文章上次已读位置
+  const pendingRestorePosRef = useRef<number | null>(null);
   useEffect(() => {
     if (!article || !scrollRef.current) return;
+    // 新文章不携带旧恢复目标
+    pendingRestorePosRef.current = null;
     const saved = localStorage.getItem(`read-pos:${article.id}`);
     if (saved) {
       const pos = parseInt(saved, 10);
       if (pos > 0) {
+        pendingRestorePosRef.current = pos;
         // 等内容渲染后再恢复，避免内容未就绪导致滑动无效
         requestAnimationFrame(() => {
-          scrollRef.current?.scrollTo({ top: pos, behavior: 'instant' });
+          if (pendingRestorePosRef.current === null) return;
+          scrollRef.current?.scrollTo({ top: pendingRestorePosRef.current, behavior: 'instant' });
         });
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article?.id]);
+
+  // 恢复初期上方图片懒加载会改变内容高度，把落点顶偏；用户首次输入前持续校正。
+  useEffect(() => {
+    if (!article || pendingRestorePosRef.current === null) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = pendingRestorePosRef.current;
+    const stop = () => {
+      pendingRestorePosRef.current = null;
+      observer.disconnect();
+      el.removeEventListener('wheel', stop);
+      el.removeEventListener('touchstart', stop);
+      el.removeEventListener('keydown', stop);
+    };
+    const observer = new MutationObserver(() => {
+      if (pendingRestorePosRef.current === null) return;
+      el.scrollTop = target;
+    });
+    // 任何用户输入都立即停止校正，交回滚动控制权
+    el.addEventListener('wheel', stop, { passive: true });
+    el.addEventListener('touchstart', stop, { passive: true });
+    el.addEventListener('keydown', stop);
+    const stopTimer = setTimeout(stop, 3000);
+    observer.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'style', 'width', 'height'] });
+    return () => {
+      clearTimeout(stopTimer);
+      observer.disconnect();
+      el.removeEventListener('wheel', stop);
+      el.removeEventListener('touchstart', stop);
+      el.removeEventListener('keydown', stop);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article?.id]);
 
@@ -914,7 +979,7 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
           )}
         </article>
         {/* 为底部导航与安全区预留额外阅读留白，避免正文末尾贴边。 */}
-        <div className="h-[calc(var(--mobile-tab-height)+1.5rem+env(safe-area-inset-bottom))] md:hidden" />
+        <div className="h-[calc(var(--mobile-tab-height)+1.5rem+env(safe-area-inset-bottom)*0.5)] md:hidden" />
       </div>
 
       {/* Image lightbox */}

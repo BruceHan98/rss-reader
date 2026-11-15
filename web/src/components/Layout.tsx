@@ -79,7 +79,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             isArticleRoute ? "transition-[transform,opacity] duration-300 ease-in-out" : "transition-none",
             isArticleRoute && immersiveMode ? "translate-y-full opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
           )}
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) * 0.5)' }}
         >
           <div className="flex items-stretch h-[calc(var(--mobile-tab-height)-1px)]">
             <BottomTabItem
@@ -139,7 +139,7 @@ function BottomTabItem({
         active ? 'text-[#3478F6] dark:text-[#82AEFF]' : 'text-[#717784] dark:text-[#959CA8]'
       )}
     >
-      <span aria-hidden="true" className="relative flex items-center justify-center w-11 h-11">
+      <span aria-hidden="true" className="relative flex items-center justify-center w-10 h-10">
         {icon}
         {badge !== undefined && badge > 0 && (
           <span className="absolute -top-1 -right-1.5 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--color-primary)] text-white text-[9px] font-bold flex items-center justify-center px-0.5">

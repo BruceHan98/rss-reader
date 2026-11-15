@@ -14,12 +14,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 type AuthState = 'checking' | 'logged-in' | 'logged-out' | 'error';
 
+// 与 main.tsx 的冷启动恢复共用同一 key（那里在渲染前读取）
 const LAST_ARTICLE_ROUTE_KEY = 'last-article-route';
-
-function isStandaloneDisplay() {
-  return window.matchMedia('(display-mode: standalone)').matches
-    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
-}
 
 const ARTICLE_LIST_MIN_WIDTH = 280;
 const ARTICLE_LIST_MAX_WIDTH = 640;
@@ -51,25 +47,9 @@ export default function App() {
     setUnauthorizedHandler(handleLogout);
   }, []);
 
-  // iOS 会在内存紧张时杀掉 PWA 进程，切回时从 start_url 重新启动，正在阅读的文章路由丢失，
-  // 表现为“页面自己刷新回首页了”。浏览器内 reload 会保留 URL 不受影响；这里只处理冷启动：
-  // sessionStorage 在进程被杀后的新会话中不存在，可用来区分冷启动与普通刷新。
-  useEffect(() => {
-    const sessionKey = 'rss-session-active';
-    const isColdStart = !sessionStorage.getItem(sessionKey);
-    sessionStorage.setItem(sessionKey, '1');
-    if (isColdStart && isStandaloneDisplay()) {
-      const saved = localStorage.getItem(LAST_ARTICLE_ROUTE_KEY);
-      if (saved?.startsWith('/article/')) {
-        navigate(saved, { replace: true });
-      }
-    }
-    // 仅挂载时执行一次；StrictMode 双调用下第二次已非冷启动，无副作用。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // 进入文章页时记录路由，用户主动离开（回到列表/其他页）则清除；
-  // 只有“最后停留往文章页”时的进程回收才会被冷启动恢复，不会劫持正常打开。
+  // 只有“最后停留在文章页”时的进程回收才会被冷启动恢复，不会劫持正常打开。
+  // 冷启动恢复本身在 main.tsx 渲染前直接改写 URL，避免先闪列表页再跳转。
   useEffect(() => {
     if (location.pathname.startsWith('/article/')) {
       localStorage.setItem(LAST_ARTICLE_ROUTE_KEY, location.pathname);

@@ -501,6 +501,10 @@ export default function ArticleList() {
   function persistScroll() {
     const el = scrollContainerRef.current;
     if (!el) return;
+    // 列表容器被隐藏时（移动端点进详情页）scrollTop 会归零，不能把 0 写入覆盖有效位置
+    if (el.offsetParent === null) return;
+    // 待恢复中（重启恢复尚未完成）：不写，避免覆盖待恢复的目标位置
+    if (pendingScrollRestoreRef.current != null) return;
     const state = loadListState();
     const key = getFilterKey(filterRef.current, showUnreadOnlyRef.current);
     const tops = { ...(state?.scrollTops ?? {}) };
@@ -513,6 +517,8 @@ export default function ArticleList() {
   // 重启（首次挂载）：从持久化状态恢复 anchor，并延迟恢复滚动位置
   const isInitialMountRef = useRef(true);
   const pendingScrollRestoreRef = useRef<number | null>(null);
+  // 滚动恢复进行中（重启后内容尚未就绪）：隐藏列表避免「先顶部后跳转」的视觉跳动
+  const [restoringScroll, setRestoringScroll] = useState(false);
 
   // Reset showUnreadOnly when switching to a filter that doesn't support it
   useEffect(() => {
@@ -544,6 +550,8 @@ export default function ArticleList() {
       isInitialMountRef.current = false;
       // 重启恢复：不回顶，待首屏文章加载后恢复到上次阅读位置
       pendingScrollRestoreRef.current = savedScrollTopFor(filter, showUnreadOnlyRef.current);
+      // 恢复未完成前隐藏列表，避免「先顶部后跳转」的视觉跳动
+      if (pendingScrollRestoreRef.current != null) setRestoringScroll(true);
       scrollContainerRef.current?.scrollTo({ top: 0 });
     } else {
       // 切换筛选：取消未完成的滚动恢复，回顶
@@ -644,14 +652,28 @@ export default function ArticleList() {
   // 首屏文章就绪后恢复上次阅读位置（仅重启恢复场景）；内容不足时继续加载下一页直至足够
   useEffect(() => {
     const pending = pendingScrollRestoreRef.current;
-    if (pending == null || articles.length === 0) return;
+    if (pending == null) return;
     const el = scrollContainerRef.current;
+    // 列表为空（无内容可恢复/无文章）：立即结束恢复状态，避免列表永久不可见
+    if (articles.length === 0) {
+      if (!el || !hasMore) {
+        pendingScrollRestoreRef.current = null;
+        setRestoringScroll(false);
+      }
+      return;
+    }
     if (!el) return;
     if (el.scrollHeight - el.clientHeight > pending) {
       pendingScrollRestoreRef.current = null;
       el.scrollTop = pending;
+      setRestoringScroll(false);
     } else if (hasMore) {
       tryLoadMore();
+    } else {
+      // 内容已全部加载仍不够高：不再等待，尽量滚到位，避免 pending 悬挂卡住后续持久化
+      pendingScrollRestoreRef.current = null;
+      el.scrollTop = pending;
+      setRestoringScroll(false);
     }
   }, [articles, hasMore]);
 
@@ -668,13 +690,45 @@ export default function ArticleList() {
     };
   }, []);
 
+  // 移动端从详情页返回：列表从 display:none 恢复显示时 scrollTop 已丢失（浏览器不保留隐藏期位置），
+  // 主动从持久化状态恢复，保证「读到哪了」不丢
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      // 容器从隐藏变可见：仅当当前位置丢失（归零）时才恢复，避免覆盖用户主动滚动
+      if (el.offsetParent === null) return;
+      if (el.scrollTop <= 2 && pendingScrollRestoreRef.current == null) {
+        const saved = savedScrollTopFor(filterRef.current, showUnreadOnlyRef.current);
+        if (saved != null && saved > 2) {
+          // 内容足够则直接就位；不够则走待恢复流程（触发翻页加载）
+          if (el.scrollHeight - el.clientHeight > saved) {
+            el.scrollTop = saved;
+          } else {
+            pendingScrollRestoreRef.current = saved;
+            tryLoadMore();
+          }
+        }
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── 新文章检查时机：切回页面/回前台时 + 定时轮询（仅列表处于顶部时主动吸收新文章）──
   useEffect(() => {
     function onVisibility() {
       if (document.visibilityState === 'visible') {
         const el = scrollContainerRef.current;
+        // 列表不可见（移动端在文章详情页）：不强制刷新，否则会重置正在阅读的列表状态；
+        // 只统计新文章数，返回列表时以悬浮条提示
+        if (!el || el.offsetParent === null) {
+          scheduleNewCheck(800);
+          return;
+        }
         // 位于顶部时：强制静默刷新列表（新文章直接出现在顶部）；否则仅统计新文章数显示悬浮条
-        if (el && el.scrollTop <= 2) {
+        if (el.scrollTop <= 2) {
           loadArticlesRef.current?.(1, true, true, { forceRefresh: true });
         } else {
           scheduleNewCheck(800);
@@ -686,21 +740,8 @@ export default function ArticleList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 定时轮询新文章（30s），仅在页面可见时执行
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      if (isFetchingRef.current || loadingNewRef.current) return;
-      const el = scrollContainerRef.current;
-      if (el && el.scrollTop <= 2) {
-        loadArticlesRef.current?.(1, true, true, { forceRefresh: true });
-      } else {
-        scheduleNewCheck(0);
-      }
-    }, 30000);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // 新文章检查只在切回 App 时执行（见上方 visibilitychange），
+  // 不做常驻轮询：重新打开 PWA / 切回前台时检查一次即可，减少不必要的请求。
 
   // 滚动自动已读：监听滚动容器的 scroll 事件，检查哪些文章已滚出顶部
   const markReadOnScrollRef = useRef(markReadOnScroll);
@@ -1074,7 +1115,7 @@ export default function ArticleList() {
       </div>
 
         {/* List */}
-      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 bg-[#FFFFFF] dark:bg-[#202124] ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
+      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 bg-[#FFFFFF] dark:bg-[#202124] ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'} ${restoringScroll ? 'invisible' : ''}`}>
         {articles.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center h-full pb-[3.5rem] lg:pb-0 gap-3 text-[#717784]">
             <div className="empty-state-icon w-20 h-20">
@@ -1104,7 +1145,7 @@ export default function ArticleList() {
                 </button>
               </div>
             )}
-            <div className="pb-[calc(var(--mobile-tab-height)+1rem+env(safe-area-inset-bottom,0px))] lg:pb-4">
+            <div className="pb-[calc(var(--mobile-tab-height)+1rem+env(safe-area-inset-bottom,0px)*0.5)] lg:pb-4">
               {articles.map((article) => (
                 <ArticleItem
                   key={article.id}
