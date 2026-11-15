@@ -177,7 +177,7 @@
     position: relative;
     flex-shrink: 0;
     min-height: var(--mobile-toolbar-height);
-    padding: 8px 20px;
+    padding: 4px 20px;
     border-bottom: 1px solid var(--color-border);
     background-color: var(--color-bg-card);
   }
@@ -336,8 +336,8 @@
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
     }
-    .ios-pwa-standalone .ios-pwa-top-bar { padding-top: env(safe-area-inset-top, 0px); }
-    .ios-pwa-standalone .page-header.ios-pwa-top-bar { padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+    .ios-pwa-standalone .ios-pwa-top-bar { padding-top: calc(4px + env(safe-area-inset-top, 0px)); }
+    .ios-pwa-standalone .page-header.ios-pwa-top-bar { padding-top: calc(4px + env(safe-area-inset-top, 0px)); }
     .ios-pwa-standalone .ios-pwa-reader-spacer { height: var(--reader-toolbar-height, calc(var(--mobile-toolbar-height) + env(safe-area-inset-top, 0px))); }
   }
   @media (prefers-reduced-motion: reduce) {

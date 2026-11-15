@@ -665,14 +665,14 @@ export default function ArticleList() {
     if (!el) return;
     if (el.scrollHeight - el.clientHeight > pending) {
       pendingScrollRestoreRef.current = null;
-      el.scrollTop = pending;
+      programmaticScrollTo(el, pending);
       setRestoringScroll(false);
     } else if (hasMore) {
       tryLoadMore();
     } else {
       // 内容已全部加载仍不够高：不再等待，尽量滚到位，避免 pending 悬挂卡住后续持久化
       pendingScrollRestoreRef.current = null;
-      el.scrollTop = pending;
+      programmaticScrollTo(el, pending);
       setRestoringScroll(false);
     }
   }, [articles, hasMore]);
@@ -703,7 +703,7 @@ export default function ArticleList() {
         if (saved != null && saved > 2) {
           // 内容足够则直接就位；不够则走待恢复流程（触发翻页加载）
           if (el.scrollHeight - el.clientHeight > saved) {
-            el.scrollTop = saved;
+            programmaticScrollTo(el, saved);
           } else {
             pendingScrollRestoreRef.current = saved;
             tryLoadMore();
@@ -747,12 +747,21 @@ export default function ArticleList() {
   const markReadOnScrollRef = useRef(markReadOnScroll);
   useEffect(() => { markReadOnScrollRef.current = markReadOnScroll; }, [markReadOnScroll]);
 
+  // 程序化恢复滚动（重启/返回列表）会触发 scroll 事件，若不抑制会把恢复点上方途经的
+  // 文章误标为已读；恢复后短暂窗口内跳过已读检查，用户手动滚动不受影响（下次 scroll 正常执行）
+  const suppressMarkReadUntilRef = useRef(0);
+  function programmaticScrollTo(el: HTMLElement, top: number) {
+    suppressMarkReadUntilRef.current = Date.now() + 500;
+    el.scrollTop = top;
+  }
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || !markReadOnScroll) return;
 
     function checkScrolledPast() {
       if (!container || !markReadOnScrollRef.current) return;
+      if (Date.now() < suppressMarkReadUntilRef.current) return;
       const containerTop = container.getBoundingClientRect().top;
       container.querySelectorAll<HTMLElement>('[data-article-id]').forEach((el) => {
         const id = el.dataset.articleId;
