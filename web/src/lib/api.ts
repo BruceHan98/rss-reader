@@ -245,11 +245,11 @@ export const api = {
     request<{ count: number }>('/articles/mark-all-read', { method: 'POST', body: JSON.stringify(params || {}) }),
 
   // Search
-  search: (params: { q: string; from?: string; to?: string; feedId?: string; isRead?: string }) => {
+  search: (params: { q: string; from?: string; to?: string; feedId?: string; isRead?: string }, signal?: AbortSignal) => {
     const q = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, v!])
     ).toString();
-    return request<{ results: Article[]; total: number }>(`/search?${q}`);
+    return request<{ results: Article[]; total: number }>(`/search?${q}`, { signal });
   },
 
   // Settings

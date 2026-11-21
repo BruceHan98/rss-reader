@@ -20,7 +20,6 @@ export default function DigestPage() {
   const date = searchParams.get('date') || todayStr();
   const [showCalendar, setShowCalendar] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const scrollPositionRef = useRef(0);
   const collapseAnchorRef = useRef<{ header: HTMLButtonElement; top: number } | null>(null);
 
   const { getEntry, getExpandedKeys, toggleExpandedKey, fetchDigest, generateDigest } = useDigestStore();
@@ -33,34 +32,9 @@ export default function DigestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || entry.status !== 'ready') return;
-    const saved = Number(sessionStorage.getItem(`digest-scroll:${date}`));
-    const position = Number.isFinite(saved) && saved > 0 ? saved : 0;
-    scrollPositionRef.current = position;
-    container.style.paddingBottom = '0px';
-    // 恢复靠近页面底部的折叠位置时，保留足够的滚动空间。
-    container.style.paddingBottom = `${Math.max(0, position - (container.scrollHeight - container.clientHeight))}px`;
-    container.scrollTo({ top: position, behavior: 'instant' });
-
-    // 卡片展开状态和页面布局会在渲染后继续稳定，再校正一次防止位置偏移。
-    const frame = requestAnimationFrame(() => {
-      container.scrollTo({ top: position, behavior: 'instant' });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [date, entry.status]);
-
+  // 切换日期时回顶，不记忆滚动位置
   useEffect(() => {
-    const currentDate = date;
-    return () => {
-      const position = scrollPositionRef.current;
-      if (position > 0) {
-        sessionStorage.setItem(`digest-scroll:${currentDate}`, String(position));
-      } else {
-        sessionStorage.removeItem(`digest-scroll:${currentDate}`);
-      }
-    };
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   }, [date]);
 
   // 取消吸顶和收起内容后，在绘制前保持分类标题原来的可视位置。
@@ -76,7 +50,6 @@ export default function DigestPage() {
       container.style.paddingBottom = `${parseFloat(container.style.paddingBottom || '0') + extraSpace}px`;
     }
     container.scrollTo({ top: position, behavior: 'instant' });
-    scrollPositionRef.current = container.scrollTop;
   }, [expandedKeys]);
 
   function toggleItem(key: string, header: HTMLButtonElement) {
@@ -84,12 +57,6 @@ export default function DigestPage() {
       collapseAnchorRef.current = { header, top: header.getBoundingClientRect().top };
     }
     toggleExpandedKey(date, key);
-  }
-
-  function saveScrollPosition() {
-    const position = scrollContainerRef.current?.scrollTop ?? scrollPositionRef.current;
-    scrollPositionRef.current = position;
-    if (position > 0) sessionStorage.setItem(`digest-scroll:${date}`, String(position));
   }
 
   function setDate(d: string) {
@@ -164,7 +131,6 @@ export default function DigestPage() {
         ref={scrollContainerRef}
         onScroll={(event) => {
           const container = event.currentTarget;
-          scrollPositionRef.current = container.scrollTop;
           // 向上浏览后收回不再需要的底部空间，不改变当前滚动位置。
           const padding = parseFloat(container.style.paddingBottom || '0');
           const needed = Math.max(0, container.scrollTop - (container.scrollHeight - container.clientHeight - padding));
@@ -264,7 +230,6 @@ export default function DigestPage() {
                   expanded={expandedKeys.includes(key)}
                   onToggle={(header) => toggleItem(key, header)}
                   onOpenArticle={(id) => {
-                    saveScrollPosition();
                     navigate(`/article/${id}`);
                   }}
                 />

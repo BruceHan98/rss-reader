@@ -128,6 +128,45 @@ try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_date_id ON articles(e
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_unread ON articles(feed_id, is_read)'); } catch {}
 // url 去重查询：WHERE feed_id = ? AND url = ?
 try { sqlite.exec('CREATE INDEX IF NOT EXISTS idx_articles_feed_url ON articles(feed_id, url)'); } catch {}
+// ── FTS5 全文索引（trigram 分词）：支持中文/英文子串检索与 bm25 相关度排序 ──
+// 仅索引标题/摘要/作者（content 太大且展示时用不到精确高亮），通过触发器与 articles 保持同步。
+try {
+  sqlite.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(
+      article_id UNINDEXED,
+      title, summary, author,
+      tokenize = 'trigram'
+    )
+  `);
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS articles_fts_insert
+    AFTER INSERT ON articles BEGIN
+      INSERT INTO articles_fts (article_id, title, summary, author)
+      VALUES (new.id, new.title, new.summary, new.author);
+    END
+  `);
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS articles_fts_delete
+    AFTER DELETE ON articles BEGIN
+      DELETE FROM articles_fts WHERE article_id = old.id;
+    END
+  `);
+  // 首次引入（或行数不一致时）全量回填
+  const ftsCount = (sqlite.prepare('SELECT COUNT(*) AS c FROM articles_fts').get() as any).c;
+  const articleCount = (sqlite.prepare('SELECT COUNT(*) AS c FROM articles').get() as any).c;
+  if (ftsCount !== articleCount) {
+    console.log(`[DB] Backfilling articles_fts (${ftsCount} -> ${articleCount})…`);
+    sqlite.exec('DELETE FROM articles_fts');
+    sqlite.exec(`
+      INSERT INTO articles_fts (article_id, title, summary, author)
+      SELECT id, title, summary, author FROM articles
+    `);
+    console.log('[DB] articles_fts backfill done');
+  }
+} catch (e: any) {
+  // trigram 需要 SQLite >= 3.34；失败时回退 LIKE（search.ts 有降级逻辑）
+  console.warn('[DB] FTS5 trigram unavailable, search falls back to LIKE:', e.message);
+}
 // 清理已存在的 url 重复文章：同 feed 下相同 url 只保留最早入库（created_at 最小）的那条
 try {
   sqlite.exec(`

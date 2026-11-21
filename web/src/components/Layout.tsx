@@ -38,7 +38,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       >
         <aside
           className={`
-            fixed lg:static inset-y-0 left-0 z-50 lg:z-30
+            fixed lg:static top-0 left-0 bottom-[env(safe-area-inset-bottom,0px)] lg:bottom-0 z-50 lg:z-30
             sidebar-surface w-[256px] h-full flex flex-col
             bg-[#F7F8FA] border-r border-[#E8EBF0]/50
             transform transition-all duration-300 ease-in-out

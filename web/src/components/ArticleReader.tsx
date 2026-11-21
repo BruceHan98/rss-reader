@@ -202,7 +202,6 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
   const isScrolling = useRef(false);
   const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrollY = useRef(0);
-  const saveScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchCancelRef = useRef(false);
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
@@ -297,48 +296,11 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     setLoading(false);
   }
 
-  // 切换文章时先保存旧文位置，并在浏览器绘制新文章前将复用的滚动容器归零。
+  // 切换文章时在浏览器绘制新文章前将复用的滚动容器归零。
   // 桌面端阅读器不会卸载，缺少这一步时新文章会继承上一篇的 scrollTop。
   useLayoutEffect(() => {
-    const container = scrollRef.current;
-    container?.scrollTo({ top: 0, behavior: 'instant' });
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
     lastScrollY.current = 0;
-
-    return () => {
-      // 切换/卸载时立即落盘当前位置（防抖定时器可能在卸载后不会触发）；
-      // 防抖回调持有旧 articleId 引用会写错 key，这里以闭包变量为准。
-      if (saveScrollTimer.current) clearTimeout(saveScrollTimer.current);
-      const pos = container?.scrollTop ?? 0;
-      if (pos > 0) {
-        localStorage.setItem(`read-pos:${articleId}`, String(pos));
-      } else {
-        localStorage.removeItem(`read-pos:${articleId}`);
-      }
-    };
-  }, [articleId]);
-
-  // 退出/切后台时立即落盘，避免进程被杀后丢失防抖中的末次位置
-  useEffect(() => {
-    const flush = () => {
-      const el = scrollRef.current;
-      if (!el) return;
-      if (saveScrollTimer.current) clearTimeout(saveScrollTimer.current);
-      if (el.scrollTop > 0) {
-        localStorage.setItem(`read-pos:${articleId}`, String(el.scrollTop));
-      } else {
-        localStorage.removeItem(`read-pos:${articleId}`);
-      }
-    };
-    const flushOnHidden = () => {
-      if (document.visibilityState === 'hidden') flush();
-    };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', flushOnHidden);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', flushOnHidden);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId]);
 
   useEffect(() => {
@@ -349,60 +311,6 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId]);
-
-  // 文章加载完成后，恢复当前文章上次已读位置
-  const pendingRestorePosRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!article || !scrollRef.current) return;
-    // 新文章不携带旧恢复目标
-    pendingRestorePosRef.current = null;
-    const saved = localStorage.getItem(`read-pos:${article.id}`);
-    if (saved) {
-      const pos = parseInt(saved, 10);
-      if (pos > 0) {
-        pendingRestorePosRef.current = pos;
-        // 等内容渲染后再恢复，避免内容未就绪导致滑动无效
-        requestAnimationFrame(() => {
-          if (pendingRestorePosRef.current === null) return;
-          scrollRef.current?.scrollTo({ top: pendingRestorePosRef.current, behavior: 'instant' });
-        });
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [article?.id]);
-
-  // 恢复初期上方图片懒加载会改变内容高度，把落点顶偏；用户首次输入前持续校正。
-  useEffect(() => {
-    if (!article || pendingRestorePosRef.current === null) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    const target = pendingRestorePosRef.current;
-    const stop = () => {
-      pendingRestorePosRef.current = null;
-      observer.disconnect();
-      el.removeEventListener('wheel', stop);
-      el.removeEventListener('touchstart', stop);
-      el.removeEventListener('keydown', stop);
-    };
-    const observer = new MutationObserver(() => {
-      if (pendingRestorePosRef.current === null) return;
-      el.scrollTop = target;
-    });
-    // 任何用户输入都立即停止校正，交回滚动控制权
-    el.addEventListener('wheel', stop, { passive: true });
-    el.addEventListener('touchstart', stop, { passive: true });
-    el.addEventListener('keydown', stop);
-    const stopTimer = setTimeout(stop, 3000);
-    observer.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'style', 'width', 'height'] });
-    return () => {
-      clearTimeout(stopTimer);
-      observer.disconnect();
-      el.removeEventListener('wheel', stop);
-      el.removeEventListener('touchstart', stop);
-      el.removeEventListener('keydown', stop);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [article?.id]);
 
   useEffect(() => {
     if (!article) return;
@@ -868,15 +776,6 @@ export default function ArticleReader({ articleId, onBack, onRead }: Props) {
         className="flex-1 overflow-y-auto overflow-x-hidden"
         onScroll={(e) => {
           const el=e.currentTarget;
-          // 节流保存阅读位置（500ms 防抖），scrollTop=0 时清除记录使下次从头开始
-          if (saveScrollTimer.current) clearTimeout(saveScrollTimer.current);
-          saveScrollTimer.current = setTimeout(() => {
-            if (el.scrollTop > 0) {
-              localStorage.setItem(`read-pos:${articleId}`, String(el.scrollTop));
-            } else {
-              localStorage.removeItem(`read-pos:${articleId}`);
-            }
-          }, 500);
           if (window.innerWidth >= 768) return;
           const delta=el.scrollTop-lastScrollY.current;
           lastScrollY.current=el.scrollTop;

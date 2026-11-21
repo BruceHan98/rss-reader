@@ -13,17 +13,6 @@ if (isIosStandalone) {
   document.documentElement.classList.add('ios-pwa-standalone');
 }
 
-// PWA 冷启动恢复：iOS 杀进程后从 start_url 重启，直接改写首帧 URL 为上次阅读的文章路由。
-// 必须在 createBrowserRouter 之前执行（渲染前），否则会先闪列表页再跳转。
-// sessionStorage 在进程被杀后的新会话中不存在，可区分冷启动与普通刷新。
-if (isIosStandalone && !sessionStorage.getItem('rss-session-active')) {
-  const saved = localStorage.getItem('last-article-route');
-  if (saved?.startsWith('/article/') && saved !== window.location.pathname) {
-    window.history.replaceState(null, '', saved);
-  }
-}
-sessionStorage.setItem('rss-session-active', '1');
-
 // load 后再安装缓存，首屏资源优先；新 SW 等页面关闭后自然接管，不强制刷新。
 let pwaUpdateAcknowledged = false;
 const updateSW = registerSW({

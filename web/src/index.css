@@ -5,8 +5,8 @@
 @layer base {
   :root {
     --mobile-toolbar-height: 53px;
-    /* 底部 Tab 栏比顶部工具栏更紧凑，减少上下留白 */
-    --mobile-tab-height: 48px;
+    /* 底部 Tab 栏与顶部工具栏同高，上下视觉协调 */
+    --mobile-tab-height: 53px;
     --font-size: 16px;
     --line-height: 1.6;
     --font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
@@ -256,9 +256,9 @@
   }
   .action-menu-item:hover { background-color: var(--color-muted); }
   .action-menu-label { @apply px-2.5 pt-2 pb-1 text-[10px]; color: var(--color-muted-fg); }
-  .reader-title { width: 100%; font-family: var(--font-ui); font-size: 20px; font-weight: 600; line-height: 1.45; text-wrap: wrap; text-align: justify; text-align-last: start; overflow-wrap: anywhere; }
+  .reader-title { width: 100%; font-family: var(--font-ui); font-size: 21px; font-weight: 600; line-height: 1.45; text-wrap: wrap; text-align: justify; text-align-last: start; overflow-wrap: anywhere; }
   @media (min-width: 768px) {
-    .reader-title { font-size: 22px; }
+    .reader-title { font-size: 23px; }
   }
   .empty-state-icon { @apply flex items-center justify-center; color: var(--color-muted-fg); }
   .sidebar-surface { background-color: var(--color-sidebar); }

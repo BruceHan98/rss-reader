@@ -8,11 +8,10 @@ import FeedIcon from './FeedIcon';
 
 const PAGE_SIZE = 30;
 
-// ── 持久化辅助：筛选状态、滚动位置、新文章游标 均按 filterKey 隔离存入 localStorage ──
+// ── 持久化辅助：筛选状态、新文章游标  均按 filterKey 隔离存入 localStorage ──
 
 interface SavedListState {
   filter: FilterSaved;
-  scrollTops: Record<string, number>;
   newAnchors: Record<string, { date: string; id: string } | null>;
 }
 
@@ -34,7 +33,6 @@ function loadListState(): SavedListState | null {
     if (parsed && typeof parsed === 'object') {
       return {
         filter: parsed.filter ?? { type: 'all' },
-        scrollTops: parsed.scrollTops ?? {},
         newAnchors: parsed.newAnchors ?? {},
       };
     }
@@ -48,18 +46,6 @@ function saveListState(state: Partial<SavedListState>) {
     localStorage.setItem(LIST_STATE_KEY, JSON.stringify(merged));
   } catch {}
 }
-
-function filterKeyOf(f: FilterSaved): string {
-  if (f.type === 'feed') return `feed:${f.feedId}${f.unreadOnly ? ':unread' : ''}`;
-  if (f.type === 'group') return `group:${f.groupId}${f.unreadOnly ? ':unread' : ''}`;
-  return f.type;
-}
-
-// 读取指定 filterKey 的滚动位置（兼容组件内 filter 类型）
-function savedScrollTopFor(f: { type: 'all' | 'feed' | 'group' | 'starred' | 'read-later' | 'unread'; feedId?: string; groupId?: string }, unreadOnly: boolean): number | null {
-  return loadListState()?.scrollTops?.[filterKeyOf({ ...f, unreadOnly } as FilterSaved)] ?? null;
-}
-
 
 export default function ArticleList() {
   const {
@@ -497,28 +483,8 @@ export default function ArticleList() {
   // Always keep the ref pointing at the latest loadArticles (captures current filter/minScore/tags)
   loadArticlesRef.current = loadArticles;
 
-  // 滚动位置记忆：按 filterKey 保存，切换筛选/重新挂载时恢复
-  function persistScroll() {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    // 列表容器被隐藏时（移动端点进详情页）scrollTop 会归零，不能把 0 写入覆盖有效位置
-    if (el.offsetParent === null) return;
-    // 待恢复中（重启恢复尚未完成）：不写，避免覆盖待恢复的目标位置
-    if (pendingScrollRestoreRef.current != null) return;
-    const state = loadListState();
-    const key = getFilterKey(filterRef.current, showUnreadOnlyRef.current);
-    const tops = { ...(state?.scrollTops ?? {}) };
-    // 滚动在顶部时清除记录，下次从最新开始
-    if (el.scrollTop <= 2) delete tops[key];
-    else tops[key] = el.scrollTop;
-    saveListState({ scrollTops: tops });
-  }
-
-  // 重启（首次挂载）：从持久化状态恢复 anchor，并延迟恢复滚动位置
+  // 重启（首次挂载）标记：首次加载保留已保存的 anchor（新文章以悬浮条提示）
   const isInitialMountRef = useRef(true);
-  const pendingScrollRestoreRef = useRef<number | null>(null);
-  // 滚动恢复进行中（重启后内容尚未就绪）：隐藏列表避免「先顶部后跳转」的视觉跳动
-  const [restoringScroll, setRestoringScroll] = useState(false);
 
   // Reset showUnreadOnly when switching to a filter that doesn't support it
   useEffect(() => {
@@ -548,16 +514,9 @@ export default function ArticleList() {
     const wasInitialMount = isInitialMountRef.current;
     if (wasInitialMount) {
       isInitialMountRef.current = false;
-      // 重启恢复：不回顶，待首屏文章加载后恢复到上次阅读位置
-      pendingScrollRestoreRef.current = savedScrollTopFor(filter, showUnreadOnlyRef.current);
-      // 恢复未完成前隐藏列表，避免「先顶部后跳转」的视觉跳动
-      if (pendingScrollRestoreRef.current != null) setRestoringScroll(true);
-      scrollContainerRef.current?.scrollTo({ top: 0 });
-    } else {
-      // 切换筛选：取消未完成的滚动恢复，回顶
-      pendingScrollRestoreRef.current = null;
-      scrollContainerRef.current?.scrollTo({ top: 0 });
     }
+    // 切换筛选：回顶
+    scrollContainerRef.current?.scrollTo({ top: 0 });
 
     persistFilterState();
 
@@ -628,94 +587,6 @@ export default function ArticleList() {
     return () => window.removeEventListener('ai-job-done', onAiDone);
   }, []);
 
-  // ── 滚动：节流保存位置；文章列表变化后执行待恢复的滚动位置 ──
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    function onScroll() {
-      if (timer) return;
-      timer = setTimeout(() => {
-        timer = null;
-        persistScroll();
-      }, 500);
-    }
-    container.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      if (timer) clearTimeout(timer);
-      container.removeEventListener('scroll', onScroll);
-      // 卸载前保存最终位置（如跳转文章详情页）
-      persistScroll();
-    };
-  }, []);
-
-  // 首屏文章就绪后恢复上次阅读位置（仅重启恢复场景）；内容不足时继续加载下一页直至足够
-  useEffect(() => {
-    const pending = pendingScrollRestoreRef.current;
-    if (pending == null) return;
-    const el = scrollContainerRef.current;
-    // 列表为空（无内容可恢复/无文章）：立即结束恢复状态，避免列表永久不可见
-    if (articles.length === 0) {
-      if (!el || !hasMore) {
-        pendingScrollRestoreRef.current = null;
-        setRestoringScroll(false);
-      }
-      return;
-    }
-    if (!el) return;
-    if (el.scrollHeight - el.clientHeight > pending) {
-      pendingScrollRestoreRef.current = null;
-      programmaticScrollTo(el, pending);
-      setRestoringScroll(false);
-    } else if (hasMore) {
-      tryLoadMore();
-    } else {
-      // 内容已全部加载仍不够高：不再等待，尽量滚到位，避免 pending 悬挂卡住后续持久化
-      pendingScrollRestoreRef.current = null;
-      programmaticScrollTo(el, pending);
-      setRestoringScroll(false);
-    }
-  }, [articles, hasMore]);
-
-  // 页面卸载前保存滚动位置（刷新/关闭 app；iOS 上 pagehide 比 beforeunload 可靠）
-  useEffect(() => {
-    function onSave() {
-      persistScroll();
-    }
-    window.addEventListener('beforeunload', onSave);
-    window.addEventListener('pagehide', onSave);
-    return () => {
-      window.removeEventListener('beforeunload', onSave);
-      window.removeEventListener('pagehide', onSave);
-    };
-  }, []);
-
-  // 移动端从详情页返回：列表从 display:none 恢复显示时 scrollTop 已丢失（浏览器不保留隐藏期位置），
-  // 主动从持久化状态恢复，保证「读到哪了」不丢
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      // 容器从隐藏变可见：仅当当前位置丢失（归零）时才恢复，避免覆盖用户主动滚动
-      if (el.offsetParent === null) return;
-      if (el.scrollTop <= 2 && pendingScrollRestoreRef.current == null) {
-        const saved = savedScrollTopFor(filterRef.current, showUnreadOnlyRef.current);
-        if (saved != null && saved > 2) {
-          // 内容足够则直接就位；不够则走待恢复流程（触发翻页加载）
-          if (el.scrollHeight - el.clientHeight > saved) {
-            programmaticScrollTo(el, saved);
-          } else {
-            pendingScrollRestoreRef.current = saved;
-            tryLoadMore();
-          }
-        }
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // ── 新文章检查时机：切回页面/回前台时 + 定时轮询（仅列表处于顶部时主动吸收新文章）──
   useEffect(() => {
     function onVisibility() {
@@ -747,21 +618,12 @@ export default function ArticleList() {
   const markReadOnScrollRef = useRef(markReadOnScroll);
   useEffect(() => { markReadOnScrollRef.current = markReadOnScroll; }, [markReadOnScroll]);
 
-  // 程序化恢复滚动（重启/返回列表）会触发 scroll 事件，若不抑制会把恢复点上方途经的
-  // 文章误标为已读；恢复后短暂窗口内跳过已读检查，用户手动滚动不受影响（下次 scroll 正常执行）
-  const suppressMarkReadUntilRef = useRef(0);
-  function programmaticScrollTo(el: HTMLElement, top: number) {
-    suppressMarkReadUntilRef.current = Date.now() + 500;
-    el.scrollTop = top;
-  }
-
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || !markReadOnScroll) return;
 
     function checkScrolledPast() {
       if (!container || !markReadOnScrollRef.current) return;
-      if (Date.now() < suppressMarkReadUntilRef.current) return;
       const containerTop = container.getBoundingClientRect().top;
       container.querySelectorAll<HTMLElement>('[data-article-id]').forEach((el) => {
         const id = el.dataset.articleId;
@@ -1018,7 +880,7 @@ export default function ArticleList() {
                     <div className="h-px bg-[var(--color-border)] mx-2 my-1" />
                     <label className="action-menu-item justify-between cursor-pointer">
                       只看未读
-                      <input type="checkbox" checked={showUnreadOnly} onChange={(event) => setShowUnreadOnly(event.target.checked)} className="w-4 h-4 accent-[#3478F6]" />
+                      <input type="checkbox" checked={showUnreadOnly} onChange={(event) => { setShowUnreadOnly(event.target.checked); setShowMarkReadMenu(false); }} className="w-4 h-4 accent-[#3478F6]" />
                     </label>
                   </>
                 )}
@@ -1124,7 +986,7 @@ export default function ArticleList() {
       </div>
 
         {/* List */}
-      <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 bg-[#FFFFFF] dark:bg-[#202124] ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'} ${restoringScroll ? 'invisible' : ''}`}>
+      <div ref={scrollContainerRef} className={`relative flex-1 overflow-y-auto flex flex-col transition-opacity duration-150 bg-[#FFFFFF] dark:bg-[#202124] ${loading && articles.length > 0 ? 'opacity-60' : 'opacity-100'}`}>
         {articles.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center h-full pb-[3.5rem] lg:pb-0 gap-3 text-[#717784]">
             <div className="empty-state-icon w-20 h-20">
@@ -1137,13 +999,13 @@ export default function ArticleList() {
           </div>
         ) : (
           <>
-            {/* 新文章悬浮提示（Twitter 风格）：点击拉取当前筛选下的新文章 */}
+            {/* 新文章悬浮提示（Twitter 风格）：点击拉取当前筛选下的新文章。绝对定位悬浮在列表上方，不占卡片空间 */}
             {newCount > 0 && (
-              <div className="sticky top-0 z-30 px-4 -mb-[1px] pointer-events-none">
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30">
                 <button
                   onClick={handleLoadNew}
                   disabled={loadingNew}
-                  className="new-articles-pill pointer-events-auto mx-auto flex items-center gap-2 px-4 h-9 rounded-full text-xs font-semibold"
+                  className="new-articles-pill pointer-events-auto flex items-center gap-2 px-4 h-9 rounded-full text-xs font-semibold shadow-[0_4px_16px_rgba(36,36,36,0.15)]"
                 >
                   {loadingNew ? (
                     <Loader2 size={13} className="animate-spin shrink-0" />

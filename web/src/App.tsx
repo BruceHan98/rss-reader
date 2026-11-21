@@ -14,9 +14,6 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 type AuthState = 'checking' | 'logged-in' | 'logged-out' | 'error';
 
-// 与 main.tsx 的冷启动恢复共用同一 key（那里在渲染前读取）
-const LAST_ARTICLE_ROUTE_KEY = 'last-article-route';
-
 const ARTICLE_LIST_MIN_WIDTH = 280;
 const ARTICLE_LIST_MAX_WIDTH = 640;
 const ARTICLE_LIST_DEFAULT_WIDTH = 440;
@@ -46,17 +43,6 @@ export default function App() {
   useEffect(() => {
     setUnauthorizedHandler(handleLogout);
   }, []);
-
-  // 进入文章页时记录路由，用户主动离开（回到列表/其他页）则清除；
-  // 只有“最后停留在文章页”时的进程回收才会被冷启动恢复，不会劫持正常打开。
-  // 冷启动恢复本身在 main.tsx 渲染前直接改写 URL，避免先闪列表页再跳转。
-  useEffect(() => {
-    if (location.pathname.startsWith('/article/')) {
-      localStorage.setItem(LAST_ARTICLE_ROUTE_KEY, location.pathname);
-    } else {
-      localStorage.removeItem(LAST_ARTICLE_ROUTE_KEY);
-    }
-  }, [location.pathname]);
 
   useEffect(() => {
     // 登录检查最多阻塞 5s；网络失败允许重试，不误判为未登录。
