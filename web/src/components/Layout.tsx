@@ -38,8 +38,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       >
         <aside
           className={`
-            fixed lg:static top-0 left-0 bottom-[env(safe-area-inset-bottom,0px)] lg:bottom-0 z-50 lg:z-30
-            sidebar-surface w-[256px] h-full flex flex-col
+            fixed lg:static top-0 left-0 z-50 lg:z-30
+            sidebar-surface sidebar-drawer w-[256px] lg:h-full flex flex-col
             bg-[#F7F8FA] border-r border-[#E8EBF0]/50
             transform transition-all duration-300 ease-in-out
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-r-0 lg:overflow-hidden'}

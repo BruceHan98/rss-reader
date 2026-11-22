@@ -173,6 +173,16 @@
   .nav-item-active { @apply nav-item; background-color: var(--color-accent); color: var(--color-primary); }
   .brand-mark { @apply flex-shrink-0; border-radius: 24%; }
   .brand-wordmark { font-family: var(--font-ui); font-weight: 600; letter-spacing: -0.02em; }
+  /* 移动端抽屉式侧边栏：底边避让底部 Tab 栏（高度+半安全区），不遮挡菜单；
+     桌面端（lg:static）此规则不生效，高度由布局控制 */
+  .sidebar-drawer.sidebar-drawer {
+    height: auto;
+    bottom: calc(var(--mobile-tab-height) + env(safe-area-inset-bottom, 0px) * 0.5);
+  }
+  @media (min-width: 1024px) {
+    .sidebar-drawer.sidebar-drawer { height: 100%; bottom: auto; }
+  }
+
   .page-header {
     position: relative;
     flex-shrink: 0;
